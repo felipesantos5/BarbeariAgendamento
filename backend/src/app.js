@@ -1,20 +1,10 @@
-process.on("uncaughtException", (error) => {
-  console.error("🔥 ERRO NÃO TRATADO (Uncaught Exception):", error);
-  // Em produção, é recomendado reiniciar a aplicação após um erro desses,
-  // pois o estado dela pode estar corrompido.
-  // process.exit(1);
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("🔥 ERRO NÃO TRATADO (Unhandled Rejection):", reason);
-});
-
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import "dotenv/config";
 import { fileURLToPath } from "url";
 import path from "path";
+import mongoose from "mongoose";
 
 import connectDB from "./config/db.js";
 import helmet from "helmet";
@@ -47,7 +37,7 @@ import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
 
-import "./services/schedulerService.js";
+import { stopAllCronJobs } from "./services/schedulerService.js";
 
 import "./models/Barbershop.js";
 import "./models/Barber.js";
@@ -57,9 +47,6 @@ import "./models/Booking.js";
 // Para obter o __dirname em projetos com ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Importe seu middleware
-// import { setBarbershopContext } from './middlewares/barbershopContext.js'; // Se for usar globalmente
 
 connectDB();
 
@@ -81,18 +68,17 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Permite requisições sem 'origin' (como Postman) ou de origens na lista
+    // Permite requisicoes sem 'origin' (como Postman) ou de origens na lista
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error("Não permitido pela política de CORS"));
+      callback(new Error("Nao permitido pela politica de CORS"));
     }
   },
   credentials: true,
 };
 
 app.use(cors(corsOptions));
-// app.use(cors({ origin: "*", credentials: true }));
 
 app.use(helmet());
 app.use(cookieParser());
@@ -105,10 +91,10 @@ app.use("/api", healthcheckRoutes);
 // --- Montando as Rotas ---
 app.use("/barbershops", barbershopRoutes);
 
-// O :barbershopId será acessível em barberRoutes via req.params.barbershopId se mergeParams=true
+// O :barbershopId sera acessivel em barberRoutes via req.params.barbershopId se mergeParams=true
 app.use("/barbershops/:barbershopId/barbers", barberRoutes);
 app.use("/barbershops/:barbershopId/services", serviceRoutes);
-app.use("/barbershops/:barbershopId/bookings", bookingRoutes); // bookingRoutes agora contém a sub-rota para free-slots
+app.use("/barbershops/:barbershopId/bookings", bookingRoutes);
 app.use("/api/upload", protectAdmin, checkAccountStatus, uploadRoutes);
 app.use("/barbershops/:barbershopId/analytics", protectAdmin, checkAccountStatus, analyticsRoutes);
 app.use("/barbershops/:barbershopId/commissions", protectAdmin, checkAccountStatus, commissionRoutes);
@@ -140,14 +126,81 @@ app.use('/api/leads', leadRoutes);
 app.use("/api/auth/superadmin", authSuperAdminRoutes);
 app.use("/api/superadmin", protectSuperAdmin, superAdminRoutes);
 
-// Exemplo de como você usaria o setBarbershopContext para as rotas da loja pública
-// import { setBarbershopContext } from './middlewares/barbershopContext.js';
-// app.get("/api/loja/:slugOuIdBarbearia/dados-publicos", setBarbershopContext, (req, res) => {
-//   // req.barbershopIdContexto e req.barbershopNameContexto estão disponíveis
-//   res.json({ id: req.barbershopIdContexto, name: req.barbershopNameContexto, outrosDados: "..." });
-// });
+// --- Global Error Handler ---
+// Captura qualquer erro nao tratado nas rotas e retorna 500 limpo
+// sem derrubar o processo.
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.originalUrl}:`, err.message || err);
+
+  // Erro de CORS
+  if (err.message && err.message.includes("CORS")) {
+    return res.status(403).json({ error: "Bloqueado pela politica de CORS" });
+  }
+
+  // Erro de JSON malformado
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "JSON invalido no corpo da requisicao" });
+  }
+
+  // Erro generico - nunca expoe stack trace em producao
+  res.status(err.status || 500).json({
+    error: "Erro interno do servidor",
+  });
+});
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API rodando em http://localhost:${PORT}`);
+});
+
+// --- Graceful Shutdown ---
+// Quando o Docker envia SIGTERM (ou SIGINT), fecha tudo corretamente
+// para que o container reinicie limpo.
+let isShuttingDown = false;
+
+function gracefulShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`\n[SHUTDOWN] Sinal ${signal} recebido. Iniciando shutdown graceful...`);
+
+  // 1. Para de aceitar novas conexoes
+  server.close(() => {
+    console.log("[SHUTDOWN] Servidor HTTP fechado.");
+  });
+
+  // 2. Para todos os cron jobs
+  stopAllCronJobs();
+  console.log("[SHUTDOWN] Cron jobs parados.");
+
+  // 3. Fecha conexao com MongoDB
+  mongoose.connection.close(false).then(() => {
+    console.log("[SHUTDOWN] MongoDB desconectado.");
+    process.exit(0);
+  }).catch((err) => {
+    console.error("[SHUTDOWN] Erro ao fechar MongoDB:", err);
+    process.exit(1);
+  });
+
+  // 4. Timeout de seguranca - se nao fechar em 10s, forca o exit
+  setTimeout(() => {
+    console.error("[SHUTDOWN] Timeout! Forcando encerramento.");
+    process.exit(1);
+  }, 10000);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// --- Tratamento de erros fatais ---
+// Loga e faz shutdown limpo para o Docker reiniciar o container
+process.on("uncaughtException", (error) => {
+  console.error("[FATAL] Uncaught Exception:", error);
+  gracefulShutdown("uncaughtException");
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[FATAL] Unhandled Rejection:", reason);
+  // Nao faz shutdown aqui - apenas loga.
+  // Unhandled rejections geralmente nao corrompem o estado do processo.
 });

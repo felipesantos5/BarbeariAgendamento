@@ -1,17 +1,72 @@
 import "dotenv/config";
 import axios from "axios";
 
+// --- Circuit Breaker ---
+// Protege o sistema contra falhas cascata quando a Evolution API cai.
+// Estados: CLOSED (normal) -> OPEN (bloqueado) -> HALF_OPEN (testando)
+const circuitBreaker = {
+  state: "CLOSED",
+  failures: 0,
+  failureThreshold: 5, // Abre o circuito apos 5 falhas consecutivas
+  cooldownMs: 60000, // Espera 60s antes de tentar novamente
+  lastFailureTime: null,
+
+  recordFailure() {
+    this.failures++;
+    this.lastFailureTime = Date.now();
+    if (this.failures >= this.failureThreshold) {
+      this.state = "OPEN";
+      console.warn(
+        `[CircuitBreaker] ABERTO - Evolution API falhou ${this.failures}x consecutivas. Pausando chamadas por ${this.cooldownMs / 1000}s.`
+      );
+    }
+  },
+
+  recordSuccess() {
+    this.failures = 0;
+    this.state = "CLOSED";
+  },
+
+  canRequest() {
+    if (this.state === "CLOSED") return true;
+
+    // Verifica se o cooldown passou
+    if (Date.now() - this.lastFailureTime >= this.cooldownMs) {
+      this.state = "HALF_OPEN";
+      console.log("[CircuitBreaker] HALF_OPEN - Testando Evolution API...");
+      return true;
+    }
+
+    return false;
+  },
+};
+
+export function getCircuitBreakerState() {
+  return {
+    state: circuitBreaker.state,
+    failures: circuitBreaker.failures,
+    lastFailureTime: circuitBreaker.lastFailureTime,
+  };
+}
+
 export async function sendWhatsAppConfirmation(customerPhone, message) {
   const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL;
   const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
   const INSTANCE_NAME = "teste";
-  // --------------------
 
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
     console.error(
-      "ERRO DE CONFIGURAÇÃO: As variáveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY são necessárias."
+      "ERRO DE CONFIGURACAO: As variaveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY sao necessarias."
     );
-    return;
+    return { success: false, error: "Configuracao ausente" };
+  }
+
+  // Circuit breaker: se o circuito esta aberto, nem tenta
+  if (!circuitBreaker.canRequest()) {
+    console.warn(
+      `[CircuitBreaker] Chamada bloqueada - Evolution API indisponivel. Mensagem para ${customerPhone} nao enviada.`
+    );
+    return { success: false, error: "Evolution API indisponivel (circuit breaker aberto)" };
   }
 
   const cleanPhone = customerPhone.replace(/\D/g, "");
@@ -30,39 +85,42 @@ export async function sendWhatsAppConfirmation(customerPhone, message) {
   };
 
   try {
-    await axios.post(url, payload, { headers });
+    await axios.post(url, payload, {
+      headers,
+      timeout: 10000, // Timeout de 10s para nao travar o processo
+    });
+
+    circuitBreaker.recordSuccess();
+    return { success: true };
   } catch (error) {
-    console.error("FALHA AO ENVIAR MENSAGEM WHATSAPP:");
+    circuitBreaker.recordFailure();
 
-    // Verifica se o erro possui uma resposta da API
-    if (error.response) {
-      console.error(
-        "Detalhes do Erro:",
-        error.response.data,
-        error.response.status
-      );
+    // Log reduzido para nao poluir quando ha muitas falhas
+    if (circuitBreaker.failures <= circuitBreaker.failureThreshold) {
+      console.error("FALHA AO ENVIAR MENSAGEM WHATSAPP:");
 
-      if (error.response.status === 400) {
-        console.error("🔍 Erro 400 - Verificar:");
-        console.error("- Número do telefone:", `55${cleanPhone}`);
-        console.error("- Tamanho da mensagem:", message.length);
-        console.error("- Instância:", INSTANCE_NAME);
+      if (error.response) {
+        console.error(
+          "Detalhes do Erro:",
+          error.response.data,
+          error.response.status
+        );
+
+        if (error.response.status === 400) {
+          console.error("Erro 400 - Verificar:");
+          console.error("- Numero do telefone:", `55${cleanPhone}`);
+          console.error("- Tamanho da mensagem:", message.length);
+          console.error("- Instancia:", INSTANCE_NAME);
+        }
+      } else {
+        console.error("Erro de Conexao ou Timeout:", error.message);
       }
-
-      // Corrigido: usando a variável 'error' em vez de 'errorData' e removendo 'attempt'
-      if ([400, 401, 403].includes(error.response.status)) {
-        return {
-          success: false,
-          error:
-            error.response?.data?.message ||
-            error.response?.data?.error ||
-            "Erro na API",
-          status: error.response.status,
-        };
-      }
-    } else {
-      // Se não houver 'error.response', é um erro de conexão ou de configuração
-      console.error("Erro de Conexão ou Configuração:", error.message);
     }
+
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || "Erro desconhecido",
+      status: error.response?.status,
+    };
   }
 }

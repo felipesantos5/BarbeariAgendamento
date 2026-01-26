@@ -143,15 +143,19 @@ export const sendAutomatedReturnReminders = async () => {
 
         const message = `Olá, ${customer.name}! Sentimos sua falta na ${barbershop.name}. Já faz ${DAYS_SINCE_LAST_CUT} dias desde seu último corte. 💈\n\nQue tal agendar seu retorno?\n${agendamentoLink}`;
 
-        await sendWhatsAppConfirmation(customer.phone, message); //
+        try {
+          await sendWhatsAppConfirmation(customer.phone, message);
 
-        // ATUALIZA O CLIENTE no banco para registrar o envio (lógica anti-spam)
-        await Customer.updateOne(
-          { _id: customer._id },
-          { $push: { returnReminders: { sentAt: new Date() } } } //
-        );
+          // So registra o envio se a mensagem foi processada sem erro
+          await Customer.updateOne(
+            { _id: customer._id },
+            { $push: { returnReminders: { sentAt: new Date() } } }
+          );
+        } catch (err) {
+          console.error(`[CRON] Falha ao enviar lembrete de retorno para ${customer.phone}:`, err.message);
+        }
 
-        await delay(5000 + Math.random() * 5000); //
+        await delay(5000 + Math.random() * 5000);
       }
     }
   } catch (error) {
