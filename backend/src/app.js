@@ -33,6 +33,7 @@ import leadRoutes from "./routes/form/lead.routes.js";
 import authSuperAdminRoutes from "./routes/authSuperAdminRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
 import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
+import whatsappRoutes from "./routes/whatsappRoutes.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
@@ -118,6 +119,10 @@ app.use("/api/barbershops/:barbershopId/subscriptions", subscriptionPaymentRoute
 app.use("/api/barbershops/:barbershopId/dashboard-metrics", protectAdmin, checkAccountStatus, dashboardRoutes);
 app.use("/api/barbershops/:barbershopId/barber-performance", protectAdmin, checkAccountStatus, barberPerformanceRoutes);
 app.use("/api/barbershops/:barbershopId/admin/bookings", protectAdmin, checkAccountStatus, manualBookingRoutes);
+
+// WhatsApp (WAHA)
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/barbershops", whatsappRoutes);
 
 // Form
 app.use('/api/leads', leadRoutes);

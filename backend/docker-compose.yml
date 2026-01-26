@@ -16,7 +16,7 @@ services:
     environment:
       - TZ=America/Sao_Paulo
     depends_on:
-      evolution-api:
+      waha:
         condition: service_started
     restart: unless-stopped
     healthcheck:
@@ -28,73 +28,30 @@ services:
     networks:
       - app_network
 
-  evolution-api:
-    image: atendai/evolution-api:latest
+  waha:
+    image: devlikeapro/waha
+    container_name: waha
     logging: *logging-config
-    container_name: evolution_api
     restart: unless-stopped
     ports:
-      - "8088:8080"
-    env_file:
-      - .en
-    volumes:
-      - evolution_instancesv2:/evolution/instances
-    depends_on:
-      - postgresql-evo
-      - redis
+      - "8088:3000"
+    environment:
+      - WAHA_API_KEY=${WAHA_API_KEY}
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+      - WAHA_DASHBOARD_ENABLED=true
+      - WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME:-waha}
+      - WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-waha}
+      - WAHA_PRESENCE_AUTO_ONLINE=False
+      - WHATSAPP_HOOK_URL=${WEBHOOK_BASE_URL}/api/whatsapp/webhook/default
+      - WHATSAPP_HOOK_EVENTS=session.status,message
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     networks:
       - app_network
-
-    environment:
-      - CONFIG_SESSION_PHONE_VERSION=2.3000.1030000000
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CACHE_REDIS_ENABLED=true
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - NODE_OPTIONS=--dns-result-order=ipv4first
-      - DEL_INSTANCE=false
-      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
-      - DATABASE_SAVE_MESSAGE_UPDATE=true
-
-  postgresql-evo:
-    image: postgres:14-alpine
-    logging: *logging-config
-    container_name: evolution_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER_EVO}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_EVO}
-      POSTGRES_DB: ${POSTGRES_DB_EVO}
-    volumes:
-      - postgres_evo_data:/var/lib/postgresql/data
-    networks:
-      - app_network
-
-  redis:
-    image: redis:latest
-    logging: *logging-config
-    container_name: redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--port", "6379", "--requirepass", "${REDIS_PASSWORD}"]
-    volumes:
-      - redis_data:/data
-    networks:
-      - app_network
-
-volumes:
-  evolution_instancesv2:
-    external: true
-    name: evolution_instancesv2
-  redis_data:
-    external: true
-    name: redis_data
-  postgres_evo_data:
 
 networks:
   app_network:

@@ -2,7 +2,7 @@ import "dotenv/config";
 import axios from "axios";
 
 // --- Circuit Breaker ---
-// Protege o sistema contra falhas cascata quando a Evolution API cai.
+// Protege o sistema contra falhas cascata quando a WAHA API cai.
 // Estados: CLOSED (normal) -> OPEN (bloqueado) -> HALF_OPEN (testando)
 const circuitBreaker = {
   state: "CLOSED",
@@ -17,7 +17,7 @@ const circuitBreaker = {
     if (this.failures >= this.failureThreshold) {
       this.state = "OPEN";
       console.warn(
-        `[CircuitBreaker] ABERTO - Evolution API falhou ${this.failures}x consecutivas. Pausando chamadas por ${this.cooldownMs / 1000}s.`
+        `[CircuitBreaker] ABERTO - WAHA API falhou ${this.failures}x consecutivas. Pausando chamadas por ${this.cooldownMs / 1000}s.`
       );
     }
   },
@@ -33,7 +33,7 @@ const circuitBreaker = {
     // Verifica se o cooldown passou
     if (Date.now() - this.lastFailureTime >= this.cooldownMs) {
       this.state = "HALF_OPEN";
-      console.log("[CircuitBreaker] HALF_OPEN - Testando Evolution API...");
+      console.log("[CircuitBreaker] HALF_OPEN - Testando WAHA API...");
       return true;
     }
 
@@ -49,14 +49,21 @@ export function getCircuitBreakerState() {
   };
 }
 
-export async function sendWhatsAppConfirmation(customerPhone, message) {
-  const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL;
-  const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
-  const INSTANCE_NAME = "teste";
+/**
+ * Gera delay aleatorio entre min e max milissegundos
+ */
+function randomDelay(minMs, maxMs) {
+  return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+}
 
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
+export async function sendWhatsAppConfirmation(customerPhone, message) {
+  const WAHA_API_URL = process.env.WAHA_API_URL;
+  const WAHA_API_KEY = process.env.WAHA_API_KEY;
+  const SESSION_NAME = "default";
+
+  if (!WAHA_API_URL || !WAHA_API_KEY) {
     console.error(
-      "ERRO DE CONFIGURACAO: As variaveis de ambiente EVOLUTION_API_URL e EVOLUTION_API_KEY sao necessarias."
+      "ERRO DE CONFIGURACAO: As variaveis de ambiente WAHA_API_URL e WAHA_API_KEY sao necessarias."
     );
     return { success: false, error: "Configuracao ausente" };
   }
@@ -64,30 +71,47 @@ export async function sendWhatsAppConfirmation(customerPhone, message) {
   // Circuit breaker: se o circuito esta aberto, nem tenta
   if (!circuitBreaker.canRequest()) {
     console.warn(
-      `[CircuitBreaker] Chamada bloqueada - Evolution API indisponivel. Mensagem para ${customerPhone} nao enviada.`
+      `[CircuitBreaker] Chamada bloqueada - WAHA API indisponivel. Mensagem para ${customerPhone} nao enviada.`
     );
-    return { success: false, error: "Evolution API indisponivel (circuit breaker aberto)" };
+    return { success: false, error: "WAHA API indisponivel (circuit breaker aberto)" };
   }
 
   const cleanPhone = customerPhone.replace(/\D/g, "");
-
-  const url = `${EVOLUTION_API_URL}/message/sendText/${INSTANCE_NAME}`;
-
-  const payload = {
-    number: `55${cleanPhone}`,
-    linkPreview: false,
-    text: message,
-  };
+  const chatId = `55${cleanPhone}@c.us`;
 
   const headers = {
     "Content-Type": "application/json",
-    apikey: EVOLUTION_API_KEY,
+    "X-Api-Key": WAHA_API_KEY,
   };
 
   try {
+    // 1. Simula typing antes de enviar
+    try {
+      await axios.post(
+        `${WAHA_API_URL}/api/${SESSION_NAME}/presence`,
+        { chatId, presence: "typing" },
+        { headers, timeout: 5000 }
+      );
+    } catch (typingError) {
+      // Nao bloqueia o envio se o typing falhar
+      console.warn("[WhatsApp] Erro ao simular typing (nao critico):", typingError.message);
+    }
+
+    // 2. Delay aleatorio de 2-3 segundos (simula digitacao humana)
+    const delay = randomDelay(2000, 3000);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    // 3. Envia a mensagem
+    const url = `${WAHA_API_URL}/api/sendText`;
+    const payload = {
+      session: SESSION_NAME,
+      chatId,
+      text: message,
+    };
+
     await axios.post(url, payload, {
       headers,
-      timeout: 10000, // Timeout de 10s para nao travar o processo
+      timeout: 10000,
     });
 
     circuitBreaker.recordSuccess();
@@ -108,9 +132,9 @@ export async function sendWhatsAppConfirmation(customerPhone, message) {
 
         if (error.response.status === 400) {
           console.error("Erro 400 - Verificar:");
-          console.error("- Numero do telefone:", `55${cleanPhone}`);
+          console.error("- ChatId:", chatId);
           console.error("- Tamanho da mensagem:", message.length);
-          console.error("- Instancia:", INSTANCE_NAME);
+          console.error("- Session:", SESSION_NAME);
         }
       } else {
         console.error("Erro de Conexao ou Timeout:", error.message);

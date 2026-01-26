@@ -1,241 +1,176 @@
 // src/services/whatsappInstanceService.js
 import axios from "axios";
 
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL;
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
-// WEBHOOK_BASE_URL é usado pela Evolution API para chamar o webhook (precisa ser acessível do container)
-// Em Docker: http://backend:3001, em produção: https://api.barbeariagendamento.com.br
+const WAHA_API_URL = process.env.WAHA_API_URL;
+const WAHA_API_KEY = process.env.WAHA_API_KEY;
 const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || process.env.BACKEND_URL || "https://api.barbeariagendamento.com.br";
-const BACKEND_URL = process.env.BACKEND_URL || "https://api.barbeariagendamento.com.br";
 
 const api = axios.create({
-  baseURL: EVOLUTION_API_URL,
+  baseURL: WAHA_API_URL,
   headers: {
     "Content-Type": "application/json",
-    apikey: EVOLUTION_API_KEY,
+    "X-Api-Key": WAHA_API_KEY,
   },
-  timeout: 30000, // 30 segundos de timeout padrão
+  timeout: 30000,
 });
 
 /**
- * Formata o QR code base64 para exibição
- * @param {string|object} base64 - String base64 do QR code ou objeto com base64
- * @returns {string} - Base64 formatado com prefixo data:image
+ * Mapeia status WAHA para formato interno
  */
-function formatQRCodeBase64(base64) {
-  if (!base64) return null;
-
-  // Se for um objeto, tenta extrair a string base64
-  if (typeof base64 === 'object') {
-    console.log('[WhatsApp] QR code veio como objeto:', JSON.stringify(base64, null, 2));
-    base64 = base64.base64 || base64.code || base64.qrcode || JSON.stringify(base64);
+function mapWahaStatus(wahaStatus) {
+  switch (wahaStatus) {
+    case "WORKING":
+      return "connected";
+    case "SCAN_QR_CODE":
+    case "STARTING":
+      return "connecting";
+    case "STOPPED":
+    case "FAILED":
+    default:
+      return "disconnected";
   }
-
-  // Garante que agora é uma string
-  if (typeof base64 !== 'string') {
-    console.error('[WhatsApp] QR code não é string nem objeto válido:', typeof base64);
-    return null;
-  }
-
-  // Se já tem o prefixo data:image, retorna como está
-  if (base64.startsWith("data:image")) {
-    return base64;
-  }
-
-  // Adiciona o prefixo para imagem PNG
-  return `data:image/png;base64,${base64}`;
 }
 
 /**
- * Cria uma nova instância do WhatsApp na Evolution API
+ * Cria uma nova sessao do WhatsApp na WAHA
  * @param {string} barbershopId - ID da barbearia
- * @returns {Promise<{instanceName: string, status: string}>}
+ * @returns {Promise<{instanceName: string, status: string, qrcode?: string}>}
  */
 export async function createInstance(barbershopId) {
   try {
     const instanceName = `barbershop_${barbershopId}`;
+    const webhookUrl = `${WEBHOOK_BASE_URL}/api/whatsapp/webhook/${instanceName}`;
 
-    console.log(`[WhatsApp] Criando instância: ${instanceName}`);
-    console.log(`[WhatsApp] URL da API: ${EVOLUTION_API_URL}`);
+    console.log(`[WhatsApp] Criando sessao WAHA: ${instanceName}`);
+    console.log(`[WhatsApp] URL da API: ${WAHA_API_URL}`);
 
-    // Primeiro, tenta deletar a instância se já existir
+    // Primeiro, tenta deletar a sessao se ja existir
     try {
-      await api.delete(`/instance/delete/${instanceName}`);
-      console.log(`[WhatsApp] Instância anterior deletada: ${instanceName}`);
-      // Aguarda um pouco para garantir que foi deletada
+      await api.delete(`/api/sessions/${instanceName}`);
+      console.log(`[WhatsApp] Sessao anterior deletada: ${instanceName}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (deleteError) {
-      // Ignora erro se a instância não existir
-      console.log(`[WhatsApp] Nenhuma instância anterior para deletar`);
+      console.log(`[WhatsApp] Nenhuma sessao anterior para deletar`);
     }
 
-    // Cria a nova instância SEM webhook primeiro
-    // O webhook será configurado DEPOIS da instância conectar
-    const createResponse = await api.post("/instance/create", {
-      instanceName,
-      integration: "WHATSAPP-BAILEYS",
-      qrcode: true,
-      // Configurações minimalistas para evitar conflitos
-      rejectCall: false,
-      groupsIgnore: true,
-      alwaysOnline: false,
-      readMessages: false,
-      readStatus: false,
-      syncFullHistory: false,
+    // Cria a nova sessao com webhook configurado na criacao
+    const createResponse = await api.post("/api/sessions", {
+      name: instanceName,
+      start: true,
+      config: {
+        webhooks: [
+          {
+            url: webhookUrl,
+            events: ["session.status", "message"],
+          },
+        ],
+      },
     });
 
-    console.log(`[WhatsApp] Resposta da criação:`, JSON.stringify(createResponse.data, null, 2));
+    console.log(`[WhatsApp] Resposta da criacao:`, JSON.stringify(createResponse.data, null, 2));
 
-    // Verifica se o QR code veio na resposta de criação
+    // Aguarda a sessao inicializar para obter o QR code
     let qrcode = null;
-    let pairingCode = null;
 
-    if (createResponse.data?.qrcode) {
-      const qrcodeData = createResponse.data.qrcode;
-      console.log('[WhatsApp] Tipo do qrcodeData:', typeof qrcodeData);
+    console.log(`[WhatsApp] Aguardando inicializacao da sessao para obter QR code...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Tenta extrair base64 de diferentes estruturas possíveis
-      let base64String = null;
-
-      if (typeof qrcodeData === 'string') {
-        // Se já veio como string
-        base64String = qrcodeData;
-      } else if (typeof qrcodeData === 'object') {
-        // Se veio como objeto, tenta diferentes propriedades
-        base64String = qrcodeData.base64 || qrcodeData.code || qrcodeData.qrcode;
-      }
-
-      qrcode = formatQRCodeBase64(base64String);
-
-      // Extrai pairing code se disponível
-      if (typeof qrcodeData === 'object') {
-        pairingCode = qrcodeData.pairingCode || qrcodeData.code || null;
-      }
-    }
-
-    // Se não veio QR code na criação, busca via endpoint connect
-    if (!qrcode) {
-      console.log(`[WhatsApp] QR code não veio na criação, aguardando inicialização do Baileys...`);
-
-      // Aguarda tempo suficiente para o Baileys inicializar (3-5 segundos)
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
+    try {
+      const qrResult = await getQRCode(instanceName);
+      qrcode = qrResult.qrcode;
+    } catch (qrError) {
+      console.error(`[WhatsApp] Erro ao obter QR code:`, qrError.message);
+      // Tenta uma segunda vez
+      await new Promise(resolve => setTimeout(resolve, 2000));
       try {
-        const connectResult = await getQRCode(instanceName);
-        qrcode = connectResult.qrcode;
-        pairingCode = connectResult.pairingCode;
-      } catch (qrError) {
-        console.error(`[WhatsApp] Erro ao obter QR code:`, qrError.message);
-        // Tenta uma segunda vez após mais 2 segundos
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const connectResult = await getQRCode(instanceName);
-        qrcode = connectResult.qrcode;
-        pairingCode = connectResult.pairingCode;
+        const qrResult = await getQRCode(instanceName);
+        qrcode = qrResult.qrcode;
+      } catch (retryError) {
+        console.error(`[WhatsApp] Segunda tentativa de QR code tambem falhou:`, retryError.message);
       }
     }
 
-    console.log(`[WhatsApp] Instância criada com sucesso: ${instanceName}`);
-    console.log(`[WhatsApp] QR code obtido: ${qrcode ? "SIM" : "NÃO"}`);
+    console.log(`[WhatsApp] Sessao criada com sucesso: ${instanceName}`);
+    console.log(`[WhatsApp] QR code obtido: ${qrcode ? "SIM" : "NAO"}`);
 
     return {
       instanceName,
-      instanceId: createResponse.data?.instance?.instanceId,
-      status: createResponse.data?.instance?.status || "created",
+      instanceId: createResponse.data?.name,
+      status: createResponse.data?.status || "created",
       qrcode,
-      pairingCode,
+      pairingCode: null,
       data: createResponse.data,
     };
   } catch (error) {
-    console.error("[WhatsApp] Erro ao criar instância:", {
+    console.error("[WhatsApp] Erro ao criar sessao:", {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
-      code: error.code
+      code: error.code,
     });
 
     let errorMessage = error.message;
-
-    // Tenta extrair mensagem mais descritiva do erro
     if (error.response?.data) {
-      if (typeof error.response.data === 'object') {
-        errorMessage = error.response.data.message ||
-                      error.response.data.error ||
-                      JSON.stringify(error.response.data);
+      if (typeof error.response.data === "object") {
+        errorMessage = error.response.data.message || error.response.data.error || JSON.stringify(error.response.data);
       } else {
         errorMessage = error.response.data;
       }
     }
 
-    throw new Error(`Falha ao criar instância: ${errorMessage}`);
+    throw new Error(`Falha ao criar sessao: ${errorMessage}`);
   }
 }
 
 /**
- * Obtém o QR Code para conectar o WhatsApp
- * @param {string} instanceName - Nome da instância
+ * Obtem o QR Code para conectar o WhatsApp via WAHA
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{qrcode: string, pairingCode?: string}>}
  */
 export async function getQRCode(instanceName) {
   try {
     console.log(`[WhatsApp] Obtendo QR Code para: ${instanceName}`);
 
-    const response = await api.get(`/instance/connect/${instanceName}`);
-
-    console.log(`[WhatsApp] Resposta do connect:`, JSON.stringify(response.data, null, 2));
-
-    // Na Evolution API v2, o QR code pode vir em diferentes formatos:
-    // 1. { base64: "...", code: "...", pairingCode: "..." }
-    // 2. { qrcode: { base64: "...", code: "..." } }
-    // 3. { qrcode: "string_base64" }
-    // 4. "string_base64" direto
-    const data = response.data;
-
-    let base64 = null;
-    let pairingCode = null;
-
-    console.log('[WhatsApp] Estrutura da resposta do connect:', {
-      hasBase64: !!data?.base64,
-      hasQrcode: !!data?.qrcode,
-      qrcodeType: typeof data?.qrcode,
-      dataType: typeof data
+    const response = await api.get(`/api/${instanceName}/auth/qr`, {
+      headers: {
+        Accept: "application/json",
+      },
     });
 
-    // Tenta extrair de diferentes estruturas possíveis
-    if (data?.base64) {
-      base64 = data.base64;
-      pairingCode = data.pairingCode || data.code;
-    } else if (data?.qrcode) {
-      // qrcode pode ser string ou objeto
-      if (typeof data.qrcode === 'string') {
-        base64 = data.qrcode;
-        pairingCode = data.pairingCode || data.code;
-      } else if (typeof data.qrcode === 'object') {
-        base64 = data.qrcode.base64 || data.qrcode.code || data.qrcode.qrcode;
-        pairingCode = data.qrcode.pairingCode || data.qrcode.code;
-      }
+    console.log(`[WhatsApp] Resposta do QR:`, JSON.stringify(response.data, null, 2));
+
+    const data = response.data;
+    let qrcode = null;
+
+    // WAHA retorna { value: "data:image/png;base64,..." } ou similar
+    if (data?.value) {
+      qrcode = data.value;
+    } else if (data?.data) {
+      qrcode = data.data;
     } else if (typeof data === "string") {
-      base64 = data;
+      qrcode = data;
     }
 
-    if (!base64) {
-      console.error("[WhatsApp] QR Code não encontrado na resposta:", data);
-      throw new Error("QR Code não disponível na resposta da API");
+    if (qrcode && !qrcode.startsWith("data:image")) {
+      qrcode = `data:image/png;base64,${qrcode}`;
     }
 
-    const qrcode = formatQRCodeBase64(base64);
+    if (!qrcode) {
+      console.error("[WhatsApp] QR Code nao encontrado na resposta:", data);
+      throw new Error("QR Code nao disponivel na resposta da API");
+    }
 
-    console.log(`[WhatsApp] QR Code extraído com sucesso`);
+    console.log(`[WhatsApp] QR Code extraido com sucesso`);
 
     return {
       qrcode,
-      pairingCode,
+      pairingCode: null,
     };
   } catch (error) {
     console.error("[WhatsApp] Erro ao obter QR Code:", error.response?.data || error.message);
 
-    // Se a instância não está em estado de espera de QR, pode ser que já esteja conectada
     if (error.response?.status === 400 || error.response?.status === 404) {
-      throw new Error("Instância não está aguardando QR Code. Verifique o status da conexão.");
+      throw new Error("Sessao nao esta aguardando QR Code. Verifique o status da conexao.");
     }
 
     throw new Error(`Falha ao obter QR Code: ${error.response?.data?.message || error.message}`);
@@ -243,66 +178,28 @@ export async function getQRCode(instanceName) {
 }
 
 /**
- * Verifica o status da conexão da instância
- * @param {string} instanceName - Nome da instância
+ * Verifica o status da conexao da sessao WAHA
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{status: string, connectedNumber?: string, instance?: object}>}
  */
 export async function getConnectionStatus(instanceName) {
   try {
-    console.log(`[WhatsApp] Verificando status da instância: ${instanceName}`);
+    console.log(`[WhatsApp] Verificando status da sessao: ${instanceName}`);
 
-    // Tenta primeiro o endpoint fetchInstances que retorna informações mais completas
-    let data = null;
-    let state = null;
+    const response = await api.get(`/api/sessions/${instanceName}`);
+    console.log(`[WhatsApp] Resposta status:`, JSON.stringify(response.data, null, 2));
+
+    const data = response.data;
+    const wahaStatus = data?.status;
+    const status = mapWahaStatus(wahaStatus);
+
+    // Numero conectado vem em data.me.id no formato "55...@c.us"
     let connectedNumber = null;
-
-    try {
-      const fetchResponse = await api.get(`/instance/fetchInstances`, {
-        params: { instanceName },
-      });
-      console.log(`[WhatsApp] Resposta fetchInstances:`, JSON.stringify(fetchResponse.data, null, 2));
-
-      // fetchInstances retorna um array, pegamos a instância correspondente
-      const instances = Array.isArray(fetchResponse.data) ? fetchResponse.data : [fetchResponse.data];
-      const instance = instances.find((i) => i.name === instanceName || i.instanceName === instanceName) || instances[0];
-
-      if (instance) {
-        state = instance.connectionStatus || instance.state || instance.status;
-        connectedNumber = instance.ownerJid || instance.owner || instance.number;
-        data = instance;
-      }
-    } catch (fetchError) {
-      console.log(`[WhatsApp] fetchInstances falhou, tentando connectionState...`);
+    if (data?.me?.id) {
+      connectedNumber = data.me.id.split("@")[0];
     }
 
-    // Se não conseguiu com fetchInstances, tenta connectionState
-    if (!state) {
-      const response = await api.get(`/instance/connectionState/${instanceName}`);
-      console.log(`[WhatsApp] Resposta connectionState:`, JSON.stringify(response.data, null, 2));
-
-      data = response.data;
-      state = data?.state || data?.instance?.state || data?.connectionState;
-      connectedNumber = data?.instance?.owner || data?.instance?.wuid || data?.owner || data?.wuid;
-    }
-
-    let status = "disconnected";
-
-    // Mapeia os estados da Evolution API para nosso formato
-    // Estados possíveis: open, close, connecting, qr, connected
-    if (state === "open" || state === "connected") {
-      status = "connected";
-    } else if (state === "connecting" || state === "qr") {
-      status = "connecting";
-    } else if (state === "close" || state === "disconnected") {
-      status = "disconnected";
-    }
-
-    // Remove o sufixo @s.whatsapp.net se existir
-    if (connectedNumber && connectedNumber.includes("@")) {
-      connectedNumber = connectedNumber.split("@")[0];
-    }
-
-    console.log(`[WhatsApp] Status mapeado: ${status}, Número: ${connectedNumber}`);
+    console.log(`[WhatsApp] Status mapeado: ${status}, Numero: ${connectedNumber}`);
 
     return {
       status,
@@ -310,20 +207,18 @@ export async function getConnectionStatus(instanceName) {
       instance: data,
     };
   } catch (error) {
-    // Se o erro for 404, a instância não existe - apenas loga em nível de info
     if (error.response?.status === 404) {
-      console.log(`[WhatsApp] Instância ${instanceName} não existe (404)`);
+      console.log(`[WhatsApp] Sessao ${instanceName} nao existe (404)`);
       return {
         status: "disconnected",
         connectedNumber: null,
       };
     }
 
-    // Para outros erros, loga como erro
     console.error("[WhatsApp] Erro ao verificar status:", {
       status: error.response?.status,
       error: error.response?.data?.error || error.message,
-      response: error.response?.data
+      response: error.response?.data,
     });
 
     throw new Error(`Falha ao verificar status: ${error.response?.data?.message || error.message}`);
@@ -331,17 +226,17 @@ export async function getConnectionStatus(instanceName) {
 }
 
 /**
- * Desconecta a instância do WhatsApp (logout)
- * @param {string} instanceName - Nome da instância
+ * Desconecta a sessao do WhatsApp (logout) via WAHA
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{message: string}>}
  */
 export async function disconnectInstance(instanceName) {
   try {
-    console.log(`[WhatsApp] Desconectando instância: ${instanceName}`);
+    console.log(`[WhatsApp] Desconectando sessao: ${instanceName}`);
 
-    await api.delete(`/instance/logout/${instanceName}`);
+    await api.post(`/api/sessions/${instanceName}/logout`);
 
-    console.log(`[WhatsApp] Instância desconectada: ${instanceName}`);
+    console.log(`[WhatsApp] Sessao desconectada: ${instanceName}`);
 
     return {
       message: "Desconectado com sucesso",
@@ -349,10 +244,9 @@ export async function disconnectInstance(instanceName) {
   } catch (error) {
     console.error("[WhatsApp] Erro ao desconectar:", error.response?.data || error.message);
 
-    // Não lançar erro se a instância já estiver desconectada
     if (error.response?.status === 404 || error.response?.status === 400) {
       return {
-        message: "Instância já estava desconectada",
+        message: "Sessao ja estava desconectada",
       };
     }
 
@@ -361,63 +255,42 @@ export async function disconnectInstance(instanceName) {
 }
 
 /**
- * Configura ou atualiza o webhook de uma instância existente
- * @param {string} instanceName - Nome da instância
+ * Configura webhook de uma sessao (no-op na WAHA - webhook configurado na criacao)
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{message: string}>}
  */
 export async function setWebhook(instanceName) {
-  try {
-    const webhookUrl = `${WEBHOOK_BASE_URL}/api/whatsapp/webhook/${instanceName}`;
-    console.log(`[WhatsApp] Configurando webhook para: ${instanceName}`);
-    console.log(`[WhatsApp] Webhook URL: ${webhookUrl}`);
-
-    const response = await api.post(`/webhook/set/${instanceName}`, {
-      enabled: true,
-      url: webhookUrl,
-      webhookByEvents: false,
-      webhookBase64: true,
-      events: [
-        "CONNECTION_UPDATE",
-        "QRCODE_UPDATED",
-        "MESSAGES_UPSERT",
-      ],
-    });
-
-    console.log(`[WhatsApp] Webhook configurado:`, JSON.stringify(response.data, null, 2));
-
-    return {
-      message: "Webhook configurado com sucesso",
-      data: response.data,
-    };
-  } catch (error) {
-    console.error("[WhatsApp] Erro ao configurar webhook:", error.response?.data || error.message);
-    throw new Error(`Falha ao configurar webhook: ${error.response?.data?.message || error.message}`);
-  }
+  // Na WAHA, o webhook e configurado na criacao da sessao
+  console.log(`[WhatsApp] setWebhook chamado para ${instanceName} - no-op (webhook configurado na criacao)`);
+  return {
+    message: "Webhook ja configurado na criacao da sessao",
+  };
 }
 
 /**
- * Reinicia uma instância (útil para reconexão)
- * @param {string} instanceName - Nome da instância
+ * Reinicia uma sessao via WAHA (stop + start)
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{message: string}>}
  */
 export async function restartInstance(instanceName) {
   try {
-    console.log(`[WhatsApp] Reiniciando instância: ${instanceName}`);
+    console.log(`[WhatsApp] Reiniciando sessao: ${instanceName}`);
 
-    const response = await api.post(`/instance/restart/${instanceName}`);
+    // WAHA: stop e depois start
+    await api.post(`/api/sessions/${instanceName}/stop`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await api.post(`/api/sessions/${instanceName}/start`);
 
-    console.log(`[WhatsApp] Instância reiniciada:`, JSON.stringify(response.data, null, 2));
+    console.log(`[WhatsApp] Sessao reiniciada: ${instanceName}`);
 
     return {
-      message: "Instância reiniciada com sucesso",
-      data: response.data,
+      message: "Sessao reiniciada com sucesso",
     };
   } catch (error) {
-    console.error("[WhatsApp] Erro ao reiniciar instância:", error.response?.data || error.message);
+    console.error("[WhatsApp] Erro ao reiniciar sessao:", error.response?.data || error.message);
 
-    // Se erro 404, a instância não existe
     if (error.response?.status === 404) {
-      throw new Error("Instância não encontrada");
+      throw new Error("Sessao nao encontrada");
     }
 
     throw new Error(`Falha ao reiniciar: ${error.response?.data?.message || error.message}`);
@@ -425,31 +298,30 @@ export async function restartInstance(instanceName) {
 }
 
 /**
- * Deleta completamente a instância
- * @param {string} instanceName - Nome da instância
+ * Deleta completamente a sessao via WAHA
+ * @param {string} instanceName - Nome da sessao
  * @returns {Promise<{message: string}>}
  */
 export async function deleteInstance(instanceName) {
   try {
-    console.log(`[WhatsApp] Deletando instância: ${instanceName}`);
+    console.log(`[WhatsApp] Deletando sessao: ${instanceName}`);
 
-    await api.delete(`/instance/delete/${instanceName}`);
+    await api.delete(`/api/sessions/${instanceName}`);
 
-    console.log(`[WhatsApp] Instância deletada: ${instanceName}`);
+    console.log(`[WhatsApp] Sessao deletada: ${instanceName}`);
 
     return {
-      message: "Instância deletada com sucesso",
+      message: "Sessao deletada com sucesso",
     };
   } catch (error) {
-    console.error("[WhatsApp] Erro ao deletar instância:", error.response?.data || error.message);
+    console.error("[WhatsApp] Erro ao deletar sessao:", error.response?.data || error.message);
 
-    // Não lançar erro se a instância não existir
     if (error.response?.status === 404) {
       return {
-        message: "Instância não encontrada (já deletada)",
+        message: "Sessao nao encontrada (ja deletada)",
       };
     }
 
-    throw new Error(`Falha ao deletar instância: ${error.response?.data?.message || error.message}`);
+    throw new Error(`Falha ao deletar sessao: ${error.response?.data?.message || error.message}`);
   }
 }
