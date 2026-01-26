@@ -52,11 +52,15 @@ services:
       - app_network
 
     environment:
-      - CONFIG_SESSION_PHONE_VERSION=2.3000.1032436840
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1030000000
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - CACHE_REDIS_ENABLED=true
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+      - DEL_INSTANCE=false
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
 
   postgresql-evo:
     image: postgres:14-alpine
