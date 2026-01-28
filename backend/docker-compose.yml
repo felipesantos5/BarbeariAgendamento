@@ -19,24 +19,12 @@ services:
       evolution-api:
         condition: service_started
     restart: unless-stopped
-
-    # Limites de recursos para evitar que o backend consuma toda a RAM disponível
-    deploy:
-      resources:
-        limits:
-          memory: 1G      # Limite máximo de RAM
-          cpus: '1.5'     # Limite de CPU (1.5 cores)
-        reservations:
-          memory: 512M    # Memória reservada garantida
-          cpus: '0.5'     # CPU mínima garantida
-
-    # Healthcheck ajustado para funcionar com wget (mais leve que node)
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s  # Aumentado para dar tempo ao PM2 inicializar
+      start_period: 30s
     networks:
       - app_network
 
@@ -48,23 +36,12 @@ services:
     ports:
       - "8088:8080"
     env_file:
-      - .env
+      - .en
     volumes:
       - evolution_instancesv2:/evolution/instances
     depends_on:
       - postgresql-evo
       - redis
-
-    # Limites de recursos para Evolution API
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G    # Evolution API consome mais memória por lidar com sessões WhatsApp
-          cpus: '1.0'
-        reservations:
-          memory: 768M
-          cpus: '0.5'
-
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1"]
       interval: 30s
@@ -80,7 +57,7 @@ services:
       - REDIS_PORT=6379
       - CACHE_REDIS_ENABLED=true
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - NODE_OPTIONS=--dns-result-order=ipv4first --max-old-space-size=1024
+      - NODE_OPTIONS=--dns-result-order=ipv4first
       - DEL_INSTANCE=false
       - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - DATABASE_SAVE_MESSAGE_UPDATE=true
@@ -90,17 +67,6 @@ services:
     logging: *logging-config
     container_name: evolution_postgres
     restart: unless-stopped
-
-    # Limites de recursos para PostgreSQL
-    deploy:
-      resources:
-        limits:
-          memory: 512M    # PostgreSQL Alpine é leve
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
     environment:
       POSTGRES_USER: ${POSTGRES_USER_EVO}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_EVO}
@@ -115,25 +81,7 @@ services:
     logging: *logging-config
     container_name: redis
     restart: unless-stopped
-
-    # Limites de recursos para Redis
-    deploy:
-      resources:
-        limits:
-          memory: 256M    # Redis para cache não precisa de muita RAM
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
-
-    command: [
-      "redis-server",
-      "--appendonly", "yes",
-      "--port", "6379",
-      "--requirepass", "${REDIS_PASSWORD}",
-      "--maxmemory", "200mb",              # Limita uso de memória do Redis
-      "--maxmemory-policy", "allkeys-lru"  # Remove chaves menos usadas quando atingir o limite
-    ]
+    command: ["redis-server", "--appendonly", "yes", "--port", "6379", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
     networks:
