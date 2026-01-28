@@ -118,11 +118,20 @@ router.get("/", protectAdmin, requireRole("admin"), async (req, res) => {
           quantity: 1,
           createdAt: 1,
           productInfo: 1,
+          totalCost: 1, // ✅ Mantém o custo total
           // Calcula a receita desta venda específica
           saleRevenue: { $multiply: ["$quantity", "$productInfo.price.sale"] },
-          // Calcula a comissão desta venda, usando a taxa do PRODUTO
+          // ✅ CORREÇÃO: Calcula a comissão sobre o LUCRO (Receita - Custo)
           commissionAmount: {
-            $multiply: [{ $multiply: ["$quantity", "$productInfo.price.sale"] }, { $divide: [{ $ifNull: ["$productInfo.commissionRate", 0] }, 100] }],
+            $multiply: [
+              {
+                $subtract: [
+                  { $multiply: ["$quantity", "$productInfo.price.sale"] }, // Receita
+                  { $ifNull: ["$totalCost", 0] }, // Custo
+                ],
+              },
+              { $divide: [{ $ifNull: ["$productInfo.commissionRate", 0] }, 100] },
+            ],
           },
         },
       },

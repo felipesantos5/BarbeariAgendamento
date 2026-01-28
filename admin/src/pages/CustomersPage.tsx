@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, ChangeEvent } from "react"; // Adicio
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 import apiClient from "@/services/api";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // Imports de UI e Ícones
@@ -72,6 +72,9 @@ interface Subscription {
   plan: Plan;
   creditsRemaining?: number;
   creditsUsed?: number;
+  barber?: {
+    name?: string;
+  };
 }
 
 interface Customer {
@@ -204,7 +207,7 @@ export function CustomersPage() {
   const handleOpenSubscribeModal = (customer: Customer) => {
     setSelectedCustomerForPlan(customer);
     setSelectedPlanId("");
-    setSelectedBarberId("");
+    setSelectedBarberId("all"); // Define "Todos" como padrão
     setAssignPlanError("");
     setIsAssignPlanModalOpen(true);
   };
@@ -221,7 +224,7 @@ export function CustomersPage() {
     try {
       await apiClient.post(`${API_BASE_URL}/api/barbershops/${barbershopId}/admin/customers/${selectedCustomerForPlan._id}/subscribe`, {
         planId: selectedPlanId,
-        barberId: selectedBarberId,
+        barberId: selectedBarberId === "all" ? null : selectedBarberId, // Envia null quando "Todos" for selecionado
       });
 
       toast.success(`${selectedCustomerForPlan.name} agora tem um novo plano!`);
@@ -323,18 +326,26 @@ export function CustomersPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      booked: { label: "Agendado", variant: "default" as const },
-      completed: { label: "Concluído", variant: "secondary" as const },
-      canceled: { label: "Cancelado", variant: "destructive" as const },
-      "no-show": { label: "Não Compareceu", variant: "outline" as const },
+    const statusConfig: Record<
+      string,
+      { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }
+    > = {
+      booked: { label: "Agendado", variant: "default" },
+      completed: { label: "Concluído", variant: "secondary" },
+      canceled: { label: "Cancelado", variant: "destructive" },
+      payment_expired: { label: "Pagamento Expirado", variant: "destructive", className: "bg-orange-600" },
+      pending_payment: { label: "Aguardando Pagamento", variant: "secondary", className: "bg-amber-500 text-white" },
+      "no-show": { label: "Não Compareceu", variant: "outline" },
     };
-    const config = statusConfig[status as keyof typeof statusConfig] || {
+
+    const config = statusConfig[status] || {
       label: status.charAt(0).toUpperCase() + status.slice(1),
       variant: "outline" as const,
+      className: "",
     };
+
     return (
-      <Badge variant={config.variant} className="text-xs">
+      <Badge variant={config.variant} className={`text-xs ${config.className || ""}`}>
         {config.label}
       </Badge>
     );
@@ -345,7 +356,18 @@ export function CustomersPage() {
       return <Badge variant="outline">Nunca agendou</Badge>;
     }
     try {
-      return <Badge variant="secondary">{formatDateTime(lastBookingTime)}</Badge>;
+      const lastDate = new Date(lastBookingTime);
+      const today = new Date();
+      const daysAgo = differenceInDays(today, lastDate);
+
+      return (
+        <div className="flex flex-col gap-1">
+          <Badge variant="secondary">{formatDateTime(lastBookingTime)}</Badge>
+          <span className="text-xs text-muted-foreground">
+            {daysAgo === 0 ? "Hoje" : daysAgo === 1 ? "Há 1 dia" : `Há ${daysAgo} dias`}
+          </span>
+        </div>
+      );
     } catch {
       return <Badge variant="destructive">Erro formatar</Badge>;
     }
@@ -487,7 +509,7 @@ export function CustomersPage() {
                         {/* Célula Planos Ativos (Renderiza múltiplos) */}
                         <TableCell>
                           {activeSubscriptions.length > 0 ? (
-                            <div className="space-y-3">
+                            <div className="space-y-3 max-w-[350px]">
                               {activeSubscriptions.map((subscription) => {
                                 const daysRemaining = getDaysRemaining(subscription.endDate);
                                 return (
@@ -495,15 +517,20 @@ export function CustomersPage() {
                                     <p className="font-medium text-sm flex items-center gap-1">
                                       <CreditCard className="h-4 w-4 text-primary" />
                                       {subscription.plan.name}
+                                      {(subscription.plan.totalCredits ?? 0) > 0 && (
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="secondary" className="font-mono text-sm">
+                                            {subscription.creditsUsed ?? 0} / {subscription.plan.totalCredits}
+                                          </Badge>
+                                          <span className="text-xs text-muted-foreground">créditos usados</span>
+                                        </div>
+                                      )}
                                     </p>
-                                    {(subscription.plan.totalCredits ?? 0) > 0 && (
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="secondary" className="font-mono text-sm">
-                                          {subscription.creditsUsed ?? 0} / {subscription.plan.totalCredits}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground">créditos usados</span>
-                                      </div>
-                                    )}
+
+                                    <div className="text-xs text-muted-foreground">
+                                      <Contact className="h-3 w-3 inline mr-1" />
+                                      {subscription.barber?.name || "Todos os barbeiros"}
+                                    </div>
                                     <div className="text-xs text-muted-foreground">
                                       <span>Expira em: {formatDate(subscription.endDate)}</span>
                                       {daysRemaining !== null && (
@@ -749,7 +776,7 @@ export function CustomersPage() {
           <DialogHeader>
             <DialogTitle>Adicionar Plano para {selectedCustomerForPlan?.name}</DialogTitle>
             <DialogDescription>
-              Selecione um plano e o barbeiro responsável pela venda. O novo plano será adicionado aos planos ativos do cliente.
+              Selecione um plano e o barbeiro responsável pela venda. Escolha "Todos" para permitir que o cliente use o plano com qualquer barbeiro.
             </DialogDescription>
           </DialogHeader>
 
@@ -786,6 +813,12 @@ export function CustomersPage() {
                   <SelectValue placeholder="Selecione um barbeiro..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <Contact className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-primary">Todos (cliente pode agendar com qualquer barbeiro)</span>
+                    </div>
+                  </SelectItem>
                   {allBarbers.length > 0 ? (
                     allBarbers.map((barber) => (
                       <SelectItem key={barber._id} value={barber._id}>

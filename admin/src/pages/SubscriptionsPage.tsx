@@ -505,7 +505,7 @@ export function SubscriptionsPage() {
                       {/* Vendedor */}
                       <TableCell>
                         <span className="text-sm">
-                          {subscription.barber?.name || (subscription.mercadoPagoPreapprovalId ? "Online" : "—")}
+                          {subscription.barber?.name || (subscription.mercadoPagoPreapprovalId ? "Online" : "Todos os barbeiros")}
                         </span>
                       </TableCell>
 
@@ -736,21 +736,23 @@ export function SubscriptionsPage() {
                 </Card>
 
                 {/* Info do Vendedor */}
-                {selectedSubscription.barber && (
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">
-                        Vendido por
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="font-medium">{selectedSubscription.barber.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Em {formatDate(selectedSubscription.createdAt)}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {selectedSubscription.barber ? "Vendido por" : "Disponível para"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="font-medium">
+                      {selectedSubscription.barber?.name || "Todos os barbeiros"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedSubscription.barber
+                        ? `Em ${formatDate(selectedSubscription.createdAt)}`
+                        : "Cliente pode agendar com qualquer profissional"}
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
             </ScrollArea>
           )}

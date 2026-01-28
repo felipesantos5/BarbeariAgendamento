@@ -20,6 +20,8 @@ import {
   Repeat,
   MessageSquare,
   AlertTriangle,
+  CreditCard,
+  Receipt,
 } from "lucide-react"; // Ícones de exemplo
 import { useAuth } from "@/contexts/AuthContext";
 import apiClient from "@/services/api";
@@ -269,6 +271,18 @@ export function AdminLayout() {
           roles: ["admin"],
         },
         {
+          to: "checkout",
+          label: "Pagamento",
+          icon: <CreditCard className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
+        {
+          to: "custos-operacionais",
+          label: "Custos Operacionais",
+          icon: <Receipt className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
+        {
           to: "recorrencia",
           label: "Recorrência",
           icon: <Repeat className="mr-2 h-4 w-4" />,
@@ -298,13 +312,13 @@ export function AdminLayout() {
 
   const SidebarContent = () => (
     <>
-      <div className="p-5">
+      <div className="p-5 pt-3">
         <h1 className="text-2xl font-bold text-white mb-1">Painel</h1>
         <div>
           <div>
-            <h2 className="text-sm font-medium text-rose-400 truncate" title={barbershop!.name}>
+            {/* <h2 className="text-sm font-medium text-rose-400 truncate" title={barbershop!.name}>
               {barbershop!.name}
-            </h2>
+            </h2> */}
             <img src={barbershop.image} alt="Logo Barbearia" className="w-2/3" />
             {/* Botão Link de Agendamento */}
             <a
@@ -355,7 +369,7 @@ export function AdminLayout() {
           )}
         </div>
       </div>
-      <nav className="flex flex-col flex-grow px-3 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-neutral-800 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-neutral-700">
+      <nav className="flex flex-col flex-grow px-3 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-neutral-600 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-neutral-700">
         {visibleSections.map((section, sectionIndex) => (
           <div key={section.title}>
             {/* Separador visual entre seções */}

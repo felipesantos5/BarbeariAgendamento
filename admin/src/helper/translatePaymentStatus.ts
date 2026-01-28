@@ -27,6 +27,7 @@ export function translatePaymentStatus(status?: string | null): PaymentStatusInf
   const statusMap: Record<string, PaymentStatusInfo> = {
     // Status de Sucesso
     approved: { text: "Pago no App", color: "success" },
+    "no-payment": { text: "Não Pago", color: "warning" },
     plan_credit: { text: "Plano", color: "success" },
 
     // Status Pendentes ou em Análise

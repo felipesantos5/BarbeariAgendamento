@@ -29,6 +29,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import dashboardRoutes from "./routes/admin/dashboardRoutes.js";
 import barberPerformanceRoutes from "./routes/admin/barberPerformanceRoutes.js";
 import manualBookingRoutes from "./routes/admin/manualBookingRoute.js";
+import operationalCostRoutes from "./routes/admin/operationalCostRoutes.js";
 import leadRoutes from "./routes/form/lead.routes.js";
 import authSuperAdminRoutes from "./routes/authSuperAdminRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
@@ -57,6 +58,8 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5175",
+  "http://localhost:5176",
   "https://barbeariagendamento.com.br",
   "https://admin.barbeariagendamento.com.br",
   "https://www.admin.barbeariagendamento.com.br",
@@ -118,6 +121,7 @@ app.use("/api/barbershops/:barbershopId/subscriptions", subscriptionPaymentRoute
 app.use("/api/barbershops/:barbershopId/dashboard-metrics", protectAdmin, checkAccountStatus, dashboardRoutes);
 app.use("/api/barbershops/:barbershopId/barber-performance", protectAdmin, checkAccountStatus, barberPerformanceRoutes);
 app.use("/api/barbershops/:barbershopId/admin/bookings", protectAdmin, checkAccountStatus, manualBookingRoutes);
+app.use("/api/barbershops/:barbershopId/admin/operational-costs", operationalCostRoutes);
 
 // Form
 app.use('/api/leads', leadRoutes);

@@ -25,6 +25,16 @@ const planSchema = new mongoose.Schema(
       min: [1, "O plano deve ter pelo menos 1 crédito."],
       default: 1,
     },
+    useBarberCommission: {
+      type: Boolean,
+      default: false, // Se true, usa a comissão do barbeiro que vende
+    },
+    commissionRate: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0, // Usado apenas se useBarberCommission = false
+    },
     barbershop: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Barbershop",

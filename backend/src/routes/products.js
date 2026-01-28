@@ -118,6 +118,52 @@ router.get("/store", async (req, res) => {
   }
 });
 
+// GET /api/barbershops/:barbershopId/products/stock-movements - Listar movimentações de estoque
+router.get("/stock-movements", protectAdmin, checkAccountStatus, requireRole("admin"), async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+    const { type, productId, startDate, endDate, limit = 100 } = req.query;
+
+    // Validação do ID da barbearia
+    if (!mongoose.Types.ObjectId.isValid(barbershopId)) {
+      return res.status(400).json({ error: "ID da barbearia inválido" });
+    }
+
+    const query = { barbershop: new mongoose.Types.ObjectId(barbershopId) };
+
+    // Filtro de data
+    if (startDate && endDate) {
+      query.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    // Filtros
+    if (type && type !== "all") {
+      query.type = type;
+    }
+
+    if (productId && productId !== "all") {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ error: "ID do produto inválido" });
+      }
+      query.product = new mongoose.Types.ObjectId(productId);
+    }
+
+    const movements = await StockMovement.find(query)
+      .populate("product", "name")
+      .populate("barber", "name")
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    res.json(movements);
+  } catch (error) {
+    console.error("Erro ao buscar movimentações de estoque:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
 router.get("/:productId", protectAdmin, checkAccountStatus, async (req, res) => {
   try {
     const { barbershopId, productId } = req.params;

@@ -493,4 +493,123 @@ router.get("/:subscriptionId/check-status", protectAdmin, async (req, res) => {
   }
 });
 
+// POST /api/barbershops/:barbershopId/subscriptions/setup-webhook
+// Configura webhook automaticamente no Mercado Pago (para admin)
+router.post("/setup-webhook", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    if (!barbershop.mercadoPagoAccessToken) {
+      return res.status(400).json({
+        error: "Token do Mercado Pago não configurado. Configure o token antes de criar webhooks.",
+      });
+    }
+
+    const webhookUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
+
+    // Fazer requisição para a API do Mercado Pago
+    const axios = (await import("axios")).default;
+
+    try {
+      // Criar webhook para assinaturas
+      const response = await axios.post(
+        "https://api.mercadopago.com/v1/webhooks",
+        {
+          url: webhookUrl,
+          events: [
+            { topic: "payment" },
+            { topic: "subscription_preapproval" },
+            { topic: "subscription_authorized_payment" },
+          ],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${barbershop.mercadoPagoAccessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      res.json({
+        success: true,
+        message: "Webhook configurado com sucesso no Mercado Pago!",
+        webhook: {
+          id: response.data.id,
+          url: webhookUrl,
+          events: response.data.events,
+        },
+      });
+    } catch (mpError) {
+      console.error("Erro ao criar webhook no MP:", mpError.response?.data || mpError.message);
+
+      // Se já existe um webhook com essa URL
+      if (mpError.response?.status === 400 && mpError.response?.data?.message?.includes("already exists")) {
+        return res.status(200).json({
+          success: true,
+          message: "Webhook já está configurado no Mercado Pago.",
+          alreadyExists: true,
+        });
+      }
+
+      return res.status(500).json({
+        error: "Erro ao configurar webhook no Mercado Pago.",
+        details: mpError.response?.data?.message || mpError.message,
+      });
+    }
+  } catch (error) {
+    console.error("Erro ao configurar webhook:", error);
+    res.status(500).json({ error: "Falha ao configurar webhook." });
+  }
+});
+
+// GET /api/barbershops/:barbershopId/subscriptions/list-webhooks
+// Lista webhooks configurados no Mercado Pago (para admin)
+router.get("/list-webhooks", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    if (!barbershop.mercadoPagoAccessToken) {
+      return res.status(400).json({
+        error: "Token do Mercado Pago não configurado.",
+      });
+    }
+
+    const axios = (await import("axios")).default;
+
+    try {
+      const response = await axios.get("https://api.mercadopago.com/v1/webhooks", {
+        headers: {
+          Authorization: `Bearer ${barbershop.mercadoPagoAccessToken}`,
+        },
+      });
+
+      res.json({
+        webhooks: response.data,
+        totalWebhooks: response.data.length,
+      });
+    } catch (mpError) {
+      console.error("Erro ao listar webhooks:", mpError.response?.data || mpError.message);
+      return res.status(500).json({
+        error: "Erro ao listar webhooks do Mercado Pago.",
+        details: mpError.response?.data?.message || mpError.message,
+      });
+    }
+  } catch (error) {
+    console.error("Erro ao listar webhooks:", error);
+    res.status(500).json({ error: "Falha ao listar webhooks." });
+  }
+});
+
 export default router;

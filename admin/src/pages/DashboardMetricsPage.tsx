@@ -26,6 +26,10 @@ import {
   LineChart,
   BarChart3,
   PieChart,
+  Package,
+  PackagePlus,
+  ShoppingCart,
+  TrendingUp,
 } from "lucide-react";
 import {
   BarChart,
@@ -76,7 +80,9 @@ interface FinancialOverview {
   commissionFromServices: number;
   commissionFromPlans: number;
   commissionFromProducts: number;
+  totalExpenses: number;
   totalCostOfGoods: number;
+  totalOperationalCosts: number;
   totalNetRevenue: number;
 }
 
@@ -125,6 +131,15 @@ interface HourlyRevenue {
   bookings: number;
 }
 
+// Movimentação de estoque
+interface StockMovement {
+  totalProductsSold: number;
+  totalProductsPurchased: number;
+  totalPurchaseCost: number;
+  totalSalesRevenue: number;
+  netProductRevenue: number;
+}
+
 // Estrutura principal da resposta da API
 interface DashboardMetricsData {
   period: Period;
@@ -135,6 +150,7 @@ interface DashboardMetricsData {
   customerStats: CustomerStats;
   dailyRevenue: DailyRevenue[];
   hourlyRevenue: HourlyRevenue[];
+  stockMovement: StockMovement;
 }
 
 // Cores para os gráficos
@@ -362,30 +378,33 @@ export default function DashboardMetricsPage() {
                   title="Faturamento Bruto"
                   value={PriceFormater(data.financialOverview.totalGrossRevenue)}
                   icon={LineChart}
-                  description="Total vendido (Serviços + Planos + Produtos)"
+                  description="Serviços + Planos + Produtos"
                   valueClassName="text-blue-600"
+                  className="justify-around"
                 />
                 <MetricCard
-                  title="Despesas (Comissões)"
+                  title="Despesas de Comissões"
                   value={PriceFormater(data.financialOverview.totalCommissionsPaid)}
                   icon={BadgePercent}
-                  description="Total pago aos profissionais"
+                  description="Comissões (Serviços, Planos, Produtos)"
                   valueClassName="text-red-600"
+                  className="justify-around"
                 />
                 <MetricCard
-                  title="Receita de Planos"
-                  value={PriceFormater(data.financialOverview.revenueFromPlans)}
-                  icon={ClipboardList}
-                  description={`${data.generalMetrics.totalPlansSold} planos vendidos`}
-                  valueClassName="text-purple-600"
+                  title="Despesas"
+                  value={PriceFormater(data.financialOverview.totalExpenses)}
+                  icon={Package}
+                  description="Compra de Produtos + Custos Operacionais"
+                  valueClassName="text-orange-600"
+                  className="justify-around"
                 />
                 <MetricCard
                   title="Faturamento Líquido"
                   value={PriceFormater(data.financialOverview.totalNetRevenue)}
                   icon={DollarSign}
-                  description="Bruto - Despesas"
+                  description="Bruto - Comissões - Despesas"
                   valueClassName="text-green-600"
-                  className="bg-green-50 border-green-200"
+                  className="bg-green-50 border-green-200 justify-around"
                 />
               </div>
 
@@ -713,6 +732,46 @@ export default function DashboardMetricsPage() {
                   />
                 </div>
               </div>
+
+              <Separator className="my-6" />
+
+              {/* Grupo de Movimentação de Estoque */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                  <Package size={20} /> Movimentação de Estoque
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard
+                    title="Produtos Vendidos"
+                    value={data.stockMovement.totalProductsSold}
+                    icon={ShoppingCart}
+                    description="Unidades vendidas no período"
+                    valueClassName="text-blue-600"
+                  />
+                  <MetricCard
+                    title="Produtos Comprados"
+                    value={PriceFormater(data.stockMovement.totalPurchaseCost)}
+                    icon={PackagePlus}
+                    description={`${data.stockMovement.totalProductsPurchased} unidades`}
+                    valueClassName="text-orange-600"
+                  />
+                  <MetricCard
+                    title="Receita de Produtos"
+                    value={PriceFormater(data.stockMovement.totalSalesRevenue)}
+                    icon={DollarSign}
+                    description="Valor bruto de vendas"
+                    valueClassName="text-green-600"
+                  />
+                  <MetricCard
+                    title="Lucro Líquido"
+                    value={PriceFormater(data.stockMovement.netProductRevenue)}
+                    icon={TrendingUp}
+                    description="Receita - Custo dos produtos"
+                    valueClassName="text-emerald-600"
+                    className="bg-emerald-50 border-emerald-200"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -744,7 +803,10 @@ export default function DashboardMetricsPage() {
                     data.barberPerformance.map((barber) => (
                       <TableRow key={barber._id}>
                         {/* Nome */}
-                        <TableCell className="font-medium">{barber.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {barber.name}
+                          <span className="ml-2 text-xs text-muted-foreground">({barber.commissionRate}%)</span>
+                        </TableCell>
 
                         {/* Receitas (Valores cheios) */}
                         <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalServiceRevenue)}</TableCell>

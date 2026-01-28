@@ -10,7 +10,11 @@ import {
   Package,
   Trash2,
   Loader2,
-  BadgePercent, // Ícone para comissão
+  BadgePercent,
+  History,
+  TrendingUp,
+  TrendingDown,
+  PackageMinus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +37,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { ImageUploader } from "../components/ImageUploader";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 import { API_BASE_URL } from "@/config/BackendUrl";
 import { useOutletContext } from "react-router-dom";
@@ -50,6 +58,25 @@ interface Barber {
   name: string;
 }
 
+interface StockMovement {
+  _id: string;
+  product: {
+    _id: string;
+    name: string;
+  };
+  type: "entrada" | "saida" | "ajuste" | "perda" | "venda";
+  quantity: number;
+  reason?: string;
+  unitCost?: number;
+  totalCost?: number;
+  barber?: {
+    _id: string;
+    name: string;
+  };
+  notes?: string;
+  createdAt: string;
+}
+
 export const ProductManagement = () => {
   const { barbershopId } = useOutletContext<AdminOutletContext>();
 
@@ -61,6 +88,19 @@ export const ProductManagement = () => {
     category: "all",
     status: "ativo",
     lowStock: false,
+  });
+
+  // Estados para histórico de estoque
+  const [activeTab, setActiveTab] = useState("produtos");
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [loadingMovements, setLoadingMovements] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const currentMonth = (new Date().getMonth() + 1).toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth);
+  const [movementFilters, setMovementFilters] = useState({
+    type: "all",
+    product: "all",
   });
 
   // Modals
@@ -133,6 +173,34 @@ export const ProductManagement = () => {
     }
   }, [barbershopId, filters]);
 
+  const fetchStockMovements = useCallback(async () => {
+    if (!barbershopId) return;
+    try {
+      setLoadingMovements(true);
+
+      // Calcula o intervalo de datas baseado no mês/ano selecionado
+      const year = parseInt(selectedYear);
+      const month = parseInt(selectedMonth) - 1; // JavaScript months are 0-indexed
+      const startDate = startOfMonth(new Date(year, month));
+      const endDate = endOfMonth(new Date(year, month));
+
+      const params = new URLSearchParams();
+      params.append("startDate", format(startDate, "yyyy-MM-dd"));
+      params.append("endDate", format(endDate, "yyyy-MM-dd"));
+
+      if (movementFilters.type !== "all") params.append("type", movementFilters.type);
+      if (movementFilters.product !== "all") params.append("productId", movementFilters.product);
+
+      const url = `${API_BASE_URL}/api/barbershops/${barbershopId}/products/stock-movements?${params}`;
+      const response = await apiClient.get(url);
+      setStockMovements(response.data);
+    } catch (error) {
+      toast.error("Erro ao carregar histórico de estoque");
+    } finally {
+      setLoadingMovements(false);
+    }
+  }, [barbershopId, movementFilters, selectedYear, selectedMonth]);
+
   // Validations
   const validateProduct = () => {
     const newErrors: Record<string, string> = {};
@@ -157,7 +225,6 @@ export const ProductManagement = () => {
 
     if (stockForm.quantity <= 0) newErrors.quantity = "Quantidade deve ser maior que zero";
     if (stockForm.unitCost < 0) newErrors.unitCost = "Custo unitário deve ser positivo";
-    if (!stockForm.reason.trim()) newErrors.reason = "Motivo é obrigatório";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -309,6 +376,12 @@ export const ProductManagement = () => {
     return () => clearTimeout(timer);
   }, [filters, barbershopId, fetchPageData]);
 
+  useEffect(() => {
+    if (activeTab === "historico" && barbershopId) {
+      fetchStockMovements();
+    }
+  }, [activeTab, barbershopId, movementFilters, fetchStockMovements]);
+
   const openProductModal = (product?: Product) => {
     if (product) {
       setSelectedProduct(product);
@@ -393,166 +466,352 @@ export const ProductManagement = () => {
         </div>
       )}
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar produtos..."
-            className="pl-10"
-            value={filters.search}
-            onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-          />
-        </div>
+      <Card>
+        <CardContent className="pt-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6 ">
+              <TabsTrigger value="produtos" className="gap-2 ">
+                <Package className="w-4 h-4" />
+                Produtos
+              </TabsTrigger>
+              <TabsTrigger value="historico" className="gap-2 ">
+                <History className="w-4 h-4" />
+                Histórico de Estoque
+              </TabsTrigger>
+            </TabsList>
 
-        <Select value={filters.category} onValueChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Todas Categorias" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas Categorias</SelectItem>
-            <SelectItem value="pomada">Pomada</SelectItem>
-            <SelectItem value="gel">Gel</SelectItem>
-            <SelectItem value="shampoo">Shampoo</SelectItem>
-            <SelectItem value="condicionador">Condicionador</SelectItem>
-            <SelectItem value="minoxidil">Minoxidil</SelectItem>
-            <SelectItem value="oleo">Óleo</SelectItem>
-            <SelectItem value="cera">Cera</SelectItem>
-            <SelectItem value="spray">Spray</SelectItem>
-            <SelectItem value="outros">Outros</SelectItem>
-          </SelectContent>
-        </Select>
+            <TabsContent value="produtos" className="mt-0">
+              <div className="space-y-4">
+                {/* Header com Título e Filtros */}
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">Produtos Cadastrados</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {products.length} produto{products.length !== 1 ? "s" : ""} encontrado{products.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
 
-        <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
-          <SelectTrigger className="w-full sm:w-32">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="ativo">Ativo</SelectItem>
-            <SelectItem value="inativo">Inativo</SelectItem>
-            <SelectItem value="descontinuado">Descontinuado</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Button
-          variant="outline"
-          onClick={() => setFilters((prev) => ({ ...prev, lowStock: !prev.lowStock }))}
-          className={filters.lowStock ? "bg-orange-50 border-orange-300" : ""}
-        >
-          <Filter className="w-4 h-4 mr-2" />
-          Baixo Estoque
-        </Button>
-      </div>
-
-      {/* Tabela */}
-      <div className="border rounded-lg overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Produto</TableHead>
-              <TableHead className="pl-12 md:px-2">Estoque</TableHead>
-              <TableHead>Preços</TableHead>
-              <TableHead>Comissão</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-12 text-right"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                </TableCell>
-              </TableRow>
-            ) : products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  Nenhum produto encontrado
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map((product) => (
-                <TableRow key={product._id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      {product.image ? (
-                        <img src={product.image} alt={product.name} className="h-10 w-10 rounded object-cover" />
-                      ) : (
-                        <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground">
-                          <Package className="h-5 w-5" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-medium">{product.name}</div>
-                        {product.brand && <div className="text-sm text-muted-foreground">{product.brand}</div>}
-                      </div>
+                  {/* Filtros */}
+                  <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar produtos..."
+                        className="pl-10"
+                        value={filters.search}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                      />
                     </div>
-                  </TableCell>
-                  <TableCell className="pl-12 md:px-2">
-                    <div className="space-y-1 sm:text-left">
-                      {product.isLowStock ? (
-                        <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          {product.stock.current}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{product.stock.current}</Badge>
-                      )}
-                      <div className="text-xs text-muted-foreground">Mín: {product.stock.minimum}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm text-right sm:text-left">
-                      <div>Venda: {formatCurrency(product.price.sale)}</div>
-                      <div className="text-muted-foreground">Compra: {formatCurrency(product.price.purchase)}</div>
-                      <div className="text-xs text-green-600">Margem: {product.profitMargin ? product.profitMargin.toFixed(1) + "%" : "--"}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{getCommissionDisplay(product)}</TableCell>
-                  <TableCell className="text-center sm:text-left">
-                    <Badge
-                      variant={product.status === "ativo" ? "default" : product.status === "inativo" ? "secondary" : "outline"}
-                      className={product.status === "ativo" ? "bg-green-100 text-green-800 border-green-200" : ""}
+
+                    <Select value={filters.category} onValueChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}>
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Todas Categorias" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas Categorias</SelectItem>
+                        <SelectItem value="pomada">Pomada</SelectItem>
+                        <SelectItem value="gel">Gel</SelectItem>
+                        <SelectItem value="shampoo">Shampoo</SelectItem>
+                        <SelectItem value="condicionador">Condicionador</SelectItem>
+                        <SelectItem value="minoxidil">Minoxidil</SelectItem>
+                        <SelectItem value="oleo">Óleo</SelectItem>
+                        <SelectItem value="cera">Cera</SelectItem>
+                        <SelectItem value="spray">Spray</SelectItem>
+                        <SelectItem value="outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="inativo">Inativo</SelectItem>
+                        <SelectItem value="descontinuado">Descontinuado</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setFilters((prev) => ({ ...prev, lowStock: !prev.lowStock }))}
+                      className={filters.lowStock ? "bg-orange-50 border-orange-300" : ""}
                     >
-                      {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openProductModal(product)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openStockModal(product)}>
-                          <Package className="w-4 h-4 mr-2" />
-                          Movimentar Estoque
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedProduct(product);
-                            setDeleteDialog(true);
-                          }}
-                          className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Deletar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                      <Filter className="w-4 h-4 mr-2" />
+                      Baixo Estoque
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tabela */}
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead className="pl-12 md:px-2">Estoque</TableHead>
+                        <TableHead>Preços</TableHead>
+                        <TableHead>Comissão</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-12 text-right"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8">
+                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                          </TableCell>
+                        </TableRow>
+                      ) : products.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            Nenhum produto encontrado
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        products.map((product) => (
+                          <TableRow key={product._id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                {product.image ? (
+                                  <img src={product.image} alt={product.name} className="h-10 w-10 rounded object-cover" />
+                                ) : (
+                                  <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                                    <Package className="h-5 w-5" />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-medium">{product.name}</div>
+                                  {product.brand && <div className="text-sm text-muted-foreground">{product.brand}</div>}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="pl-12 md:px-2">
+                              <div className="space-y-1 sm:text-left">
+                                {product.isLowStock ? (
+                                  <Badge variant="destructive" className="gap-1">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    {product.stock.current}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary">{product.stock.current}</Badge>
+                                )}
+                                <div className="text-xs text-muted-foreground">Mín: {product.stock.minimum}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm text-right sm:text-left">
+                                <div>Venda: {formatCurrency(product.price.sale)}</div>
+                                <div className="text-muted-foreground">Compra: {formatCurrency(product.price.purchase)}</div>
+                                <div className="text-xs text-green-600">Margem: {product.profitMargin ? product.profitMargin.toFixed(1) + "%" : "--"}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getCommissionDisplay(product)}</TableCell>
+                            <TableCell className="text-center sm:text-left">
+                              <Badge
+                                variant={product.status === "ativo" ? "default" : product.status === "inativo" ? "secondary" : "outline"}
+                                className={product.status === "ativo" ? "bg-green-100 text-green-800 border-green-200" : ""}
+                              >
+                                {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openProductModal(product)}>
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openStockModal(product)}>
+                                    <Package className="w-4 h-4 mr-2" />
+                                    Movimentar Estoque
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedProduct(product);
+                                      setDeleteDialog(true);
+                                    }}
+                                    className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Deletar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="historico" className="mt-0">
+              <div className="space-y-4">
+                {/* Header com Título e Filtros */}
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Histórico de Movimentações</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {stockMovements.length} movimentaç{stockMovements.length !== 1 ? "ões" : "ão"} em{" "}
+                      {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][parseInt(selectedMonth) - 1]} de {selectedYear}
+                    </p>
+                  </div>
+
+                  {/* Filtros */}
+                  <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                    <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                      <SelectTrigger className="w-full sm:w-[150px]">
+                        <SelectValue placeholder="Mês" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"].map((name, index) => (
+                          <SelectItem key={index} value={(index + 1).toString()}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="w-full sm:w-[120px]">
+                        <SelectValue placeholder="Ano" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString()).map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={movementFilters.product} onValueChange={(value) => setMovementFilters((prev) => ({ ...prev, product: value }))}>
+                      <SelectTrigger className="w-full sm:w-[200px]">
+                        <SelectValue placeholder="Todos os produtos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os produtos</SelectItem>
+                        {products.map((product) => (
+                          <SelectItem key={product._id} value={product._id}>
+                            {product.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={movementFilters.type} onValueChange={(value) => setMovementFilters((prev) => ({ ...prev, type: value }))}>
+                      <SelectTrigger className="w-full sm:w-[150px]">
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="entrada">Entrada</SelectItem>
+                        <SelectItem value="saida">Saída</SelectItem>
+                        <SelectItem value="venda">Venda</SelectItem>
+                        <SelectItem value="ajuste">Ajuste</SelectItem>
+                        <SelectItem value="perda">Perda</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Tabela */}
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data/Hora</TableHead>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="text-center">Quantidade</TableHead>
+                        <TableHead>Custo/Valor</TableHead>
+                        <TableHead>Barbeiro</TableHead>
+                        <TableHead>Motivo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loadingMovements ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8">
+                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                          </TableCell>
+                        </TableRow>
+                      ) : stockMovements.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                            Nenhuma movimentação encontrada
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        stockMovements.map((movement) => (
+                          <TableRow key={movement._id}>
+                            <TableCell className="font-medium">
+                              {format(new Date(movement.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell>{movement.product?.name || "Produto removido"}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  movement.type === "entrada"
+                                    ? "default"
+                                    : movement.type === "venda"
+                                      ? "secondary"
+                                      : movement.type === "saida"
+                                        ? "destructive"
+                                        : "outline"
+                                }
+                                className={`gap-1 ${movement.type === "entrada"
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : movement.type === "venda"
+                                    ? "bg-blue-100 text-blue-800 border-blue-200"
+                                    : ""
+                                  }`}
+                              >
+                                {movement.type === "entrada" && <TrendingUp className="w-3 h-3" />}
+                                {movement.type === "saida" && <TrendingDown className="w-3 h-3" />}
+                                {movement.type === "venda" && <PackageMinus className="w-3 h-3" />}
+                                {movement.type === "ajuste" && <Package className="w-3 h-3" />}
+                                {movement.type === "perda" && <AlertTriangle className="w-3 h-3" />}
+                                {movement.type.charAt(0).toUpperCase() + movement.type.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span
+                                className={`font-semibold ${movement.type === "entrada" ? "text-green-600" : movement.type === "saida" || movement.type === "venda" || movement.type === "perda" ? "text-red-600" : ""
+                                  }`}
+                              >
+                                {movement.type === "entrada" ? "+" : "-"}
+                                {movement.quantity}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {movement.totalCost ? formatCurrency(movement.totalCost) : movement.unitCost ? formatCurrency(movement.unitCost) : "--"}
+                            </TableCell>
+                            <TableCell>{movement.barber?.name || "--"}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {movement.reason || movement.notes || "--"}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* Modal Produto (Atualizado) */}
       <Dialog open={productModal} onOpenChange={setProductModal}>
@@ -896,12 +1155,12 @@ export const ProductManagement = () => {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="reason">Motivo *</Label>
+              <Label htmlFor="reason">Motivo</Label>
               <Input
                 id="reason"
                 value={stockForm.reason}
                 onChange={(e) => setStockForm((prev) => ({ ...prev, reason: e.target.value }))}
-                placeholder="Ex: Compra de fornecedor, Venda balcão"
+                placeholder="Ex: Compra de fornecedor, Venda balcão (opcional)"
               />
               {errors.reason && <p className="text-sm text-red-500">{errors.reason}</p>}
             </div>

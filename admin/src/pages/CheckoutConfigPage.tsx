@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Webhook, List } from "lucide-react";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
 import { API_BASE_URL } from "@/config/BackendUrl";
 
@@ -15,6 +15,13 @@ interface CheckoutSettings {
   mercadoPagoAccessToken?: string;
   paymentsEnabled?: boolean;
   requireOnlinePayment?: boolean;
+}
+
+interface WebhookInfo {
+  id: string;
+  url: string;
+  events: Array<{ topic: string }>;
+  status: string;
 }
 
 export const CheckoutConfigPage = () => {
@@ -28,6 +35,10 @@ export const CheckoutConfigPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [isSettingUpWebhook, setIsSettingUpWebhook] = useState(false);
+  const [isLoadingWebhooks, setIsLoadingWebhooks] = useState(false);
+  const [webhooks, setWebhooks] = useState<WebhookInfo[]>([]);
+  const [showWebhooks, setShowWebhooks] = useState(false);
 
   // Busca as configurações de checkout
   const fetchCheckoutSettings = async () => {
@@ -94,6 +105,51 @@ export const CheckoutConfigPage = () => {
       toast.error(error.response?.data?.error || "Erro ao salvar configurações");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Configura webhook automaticamente
+  const handleSetupWebhook = async () => {
+    if (!formData.mercadoPagoAccessToken) {
+      toast.error("Configure o Access Token do Mercado Pago primeiro");
+      return;
+    }
+
+    setIsSettingUpWebhook(true);
+    try {
+      const response = await apiClient.post(
+        `${API_BASE_URL}/api/barbershops/${barbershopId}/subscriptions/setup-webhook`
+      );
+      toast.success("Webhook configurado com sucesso!");
+      console.log("Webhook configurado:", response.data);
+    } catch (error: any) {
+      console.error("Erro ao configurar webhook:", error);
+      toast.error(error.response?.data?.error || "Erro ao configurar webhook");
+    } finally {
+      setIsSettingUpWebhook(false);
+    }
+  };
+
+  // Lista webhooks configurados
+  const handleListWebhooks = async () => {
+    if (!formData.mercadoPagoAccessToken) {
+      toast.error("Configure o Access Token do Mercado Pago primeiro");
+      return;
+    }
+
+    setIsLoadingWebhooks(true);
+    try {
+      const response = await apiClient.get(
+        `${API_BASE_URL}/api/barbershops/${barbershopId}/subscriptions/list-webhooks`
+      );
+      setWebhooks(response.data.webhooks || []);
+      setShowWebhooks(true);
+      toast.success(`${response.data.totalWebhooks || 0} webhook(s) encontrado(s)!`);
+    } catch (error: any) {
+      console.error("Erro ao listar webhooks:", error);
+      toast.error(error.response?.data?.error || "Erro ao listar webhooks");
+    } finally {
+      setIsLoadingWebhooks(false);
     }
   };
 
@@ -212,10 +268,107 @@ export const CheckoutConfigPage = () => {
               <li>Cole o token no campo acima e ative o checkout online</li>
               <li>Seus clientes poderão pagar pelos agendamentos diretamente no site</li>
             </ol>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-              💡 Dica: Mantenha seu Access Token seguro e não compartilhe com ninguém.
-            </p>
           </fieldset>
+
+          {/* Gerenciamento de Webhooks */}
+          {formData.paymentsEnabled && formData.mercadoPagoAccessToken && (
+            <fieldset className="border p-4 rounded-md bg-green-50/50 dark:bg-green-950/20">
+              <legend className="text-lg font-semibold px-2 text-green-900 dark:text-green-100">
+                Configuração de Webhooks (Assinaturas)
+              </legend>
+              <div className="space-y-3 mt-2">
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  Webhooks são necessários para que o sistema de assinaturas recorrentes funcione automaticamente.
+                  Configure uma vez e o sistema receberá notificações sobre pagamentos e renovações.
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSetupWebhook}
+                    disabled={isSettingUpWebhook}
+                    className="gap-2"
+                  >
+                    {isSettingUpWebhook ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Configurando...
+                      </>
+                    ) : (
+                      <>
+                        <Webhook className="h-4 w-4" />
+                        Configurar Webhook Automaticamente
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleListWebhooks}
+                    disabled={isLoadingWebhooks}
+                    className="gap-2"
+                  >
+                    {isLoadingWebhooks ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Carregando...
+                      </>
+                    ) : (
+                      <>
+                        <List className="h-4 w-4" />
+                        Ver Webhooks Configurados
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Lista de webhooks */}
+                {showWebhooks && webhooks.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h4 className="text-sm font-semibold text-green-900 dark:text-green-100">
+                      Webhooks Configurados:
+                    </h4>
+                    {webhooks.map((webhook) => (
+                      <div
+                        key={webhook.id}
+                        className="p-3 bg-white dark:bg-gray-800 rounded border text-xs space-y-1"
+                      >
+                        <div className="font-mono break-all">
+                          <span className="font-semibold">URL:</span> {webhook.url}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Status:</span>{" "}
+                          <span
+                            className={
+                              webhook.status === "active"
+                                ? "text-green-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                            }
+                          >
+                            {webhook.status}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-semibold">Eventos:</span>{" "}
+                          {webhook.events.map((e) => e.topic).join(", ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {showWebhooks && webhooks.length === 0 && (
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-2">
+                    Nenhum webhook configurado. Clique em "Configurar Webhook Automaticamente" para criar um.
+                  </p>
+                )}
+              </div>
+            </fieldset>
+          )}
         </CardContent>
 
         <CardFooter className="justify-end mt-4">

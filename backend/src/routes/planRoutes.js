@@ -17,21 +17,23 @@ router.post("/", protectAdmin, checkAccountStatus, requireRole("admin"), async (
   try {
     const { barbershopId } = req.params;
 
-    // --- 1. CAPTURE O NOVO CAMPO 'durationInDays' DO CORPO DA REQUISIÇÃO ---
-    const { name, description, price, durationInDays, totalCredits } = req.body;
+    // --- 1. CAPTURE OS CAMPOS DO CORPO DA REQUISIÇÃO ---
+    const { name, description, price, durationInDays, totalCredits, useBarberCommission, commissionRate } = req.body;
 
     // --- 2. ATUALIZE A VALIDAÇÃO PARA INCLUIR O NOVO CAMPO ---
     if (!name || price === undefined || durationInDays === undefined) {
       return res.status(400).json({ error: "Nome, preço e duração em dias são obrigatórios." });
     }
 
-    // --- 3. INCLUA O NOVO CAMPO AO CRIAR O PLANO ---
+    // --- 3. INCLUA OS CAMPOS DE COMISSÃO AO CRIAR O PLANO ---
     const newPlan = new Plan({
       name,
       description,
       price,
       durationInDays,
       totalCredits,
+      useBarberCommission: useBarberCommission || false,
+      commissionRate: commissionRate !== undefined ? commissionRate : 0,
       barbershop: barbershopId,
     });
 
@@ -71,7 +73,7 @@ router.get("/", async (req, res) => {
 router.put("/:planId", protectAdmin, checkAccountStatus, requireRole("admin"), async (req, res) => {
   try {
     const { barbershopId, planId } = req.params;
-    const { name, description, price, durationInDays, totalCredits } = req.body;
+    const { name, description, price, durationInDays, totalCredits, useBarberCommission, commissionRate } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       return res.status(400).json({ error: "ID do plano inválido." });
@@ -83,6 +85,8 @@ router.put("/:planId", protectAdmin, checkAccountStatus, requireRole("admin"), a
     if (price !== undefined) updateData.price = price;
     if (durationInDays !== undefined) updateData.durationInDays = durationInDays;
     if (totalCredits !== undefined) updateData.totalCredits = totalCredits;
+    if (useBarberCommission !== undefined) updateData.useBarberCommission = useBarberCommission;
+    if (commissionRate !== undefined) updateData.commissionRate = commissionRate;
 
     const updatedPlan = await Plan.findOneAndUpdate(
       { _id: planId, barbershop: barbershopId }, // Garante que o admin só pode editar planos da sua própria barbearia

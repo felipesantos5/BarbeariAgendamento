@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 import apiClient from "@/services/api";
-import { format } from "date-fns";
+import { format, subDays, subMonths, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // Imports de UI e Ícones
@@ -17,6 +17,7 @@ import { Booking } from "@/types/bookings";
 import { translatePaymentStatus } from "@/helper/translatePaymentStatus";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
 import { PriceFormater } from "@/helper/priceFormater";
+import { PhoneFormat } from "@/helper/phoneFormater";
 
 // --- Tipagens ---
 interface Barber {
@@ -35,6 +36,7 @@ export const AgendamentosList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBarber, setSelectedBarber] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10; // Itens por página
 
@@ -65,16 +67,46 @@ export const AgendamentosList = () => {
 
   // --- 2. LÓGICA DE FILTRAGEM E PAGINAÇÃO ---
   const filteredBookings = useMemo(() => {
+    const now = new Date();
+    let startDate: Date | null = null;
+
+    // Calcula a data de início baseado no período selecionado
+    switch (selectedPeriod) {
+      case "day":
+        startDate = startOfDay(now);
+        break;
+      case "week":
+        startDate = startOfDay(subDays(now, 7));
+        break;
+      case "month":
+        startDate = startOfDay(subMonths(now, 1));
+        break;
+      case "3months":
+        startDate = startOfDay(subMonths(now, 3));
+        break;
+      case "6months":
+        startDate = startOfDay(subMonths(now, 6));
+        break;
+      case "all":
+      default:
+        startDate = null;
+        break;
+    }
+
     return bookings.filter((booking) => {
       // Adicionado 'booking.customer &&' para segurança
       const customerNameMatch = booking.customer && booking.customer.name.toLowerCase().includes(searchTerm.toLowerCase());
       const barberMatch = selectedBarber === "all" || booking.barber?._id === selectedBarber;
       const statusMatch = selectedStatus === "all" || booking.status === selectedStatus;
 
+      // Filtro de período
+      const bookingDate = new Date(booking.time);
+      const periodMatch = !startDate || bookingDate >= startDate;
+
       // Retorna true apenas se todos os filtros (que se aplicam) forem verdadeiros
-      return customerNameMatch && barberMatch && statusMatch;
+      return customerNameMatch && barberMatch && statusMatch && periodMatch;
     });
-  }, [bookings, searchTerm, selectedBarber, selectedStatus]);
+  }, [bookings, searchTerm, selectedBarber, selectedStatus, selectedPeriod]);
 
   const paginatedBookings = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -94,6 +126,18 @@ export const AgendamentosList = () => {
         );
       case "canceled":
         return <Badge variant="destructive">Cancelado</Badge>;
+      case "payment_expired":
+        return (
+          <Badge variant="destructive" className="bg-orange-600">
+            Pagamento Expirado
+          </Badge>
+        );
+      case "pending_payment":
+        return (
+          <Badge variant="secondary" className="bg-amber-500 text-white">
+            Aguardando Pagamento
+          </Badge>
+        );
       case "confirmed":
         return <Badge variant="default">Confirmado</Badge>;
       case "booked":
@@ -163,8 +207,29 @@ export const AgendamentosList = () => {
               <SelectItem value="all">Todos Status</SelectItem>
               <SelectItem value="booked">Agendado</SelectItem>
               <SelectItem value="confirmed">Confirmado</SelectItem>
+              <SelectItem value="pending_payment">Aguardando Pagamento</SelectItem>
               <SelectItem value="completed">Concluído</SelectItem>
               <SelectItem value="canceled">Cancelado</SelectItem>
+              <SelectItem value="payment_expired">Pagamento Expirado</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedPeriod}
+            onValueChange={(value) => {
+              setSelectedPeriod(value);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Período" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo o Período</SelectItem>
+              <SelectItem value="day">Hoje</SelectItem>
+              <SelectItem value="week">Última Semana</SelectItem>
+              <SelectItem value="month">Último Mês</SelectItem>
+              <SelectItem value="3months">Últimos 3 Meses</SelectItem>
+              <SelectItem value="6months">Últimos 6 Meses</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -187,7 +252,12 @@ export const AgendamentosList = () => {
               {paginatedBookings.length > 0 ? (
                 paginatedBookings.map((booking) => (
                   <TableRow key={booking._id}>
-                    <TableCell className="font-medium">{booking.customer?.name || "Cliente Deletado"}</TableCell>
+                    <TableCell className="font-medium">
+                      <div>{booking.customer?.name || "Cliente Deletado"}</div>
+                      {booking.customer?.phone && (
+                        <div className="text-xs text-muted-foreground">{PhoneFormat(booking.customer.phone)}</div>
+                      )}
+                    </TableCell>
                     <TableCell>{getStatusBadge(booking.status)}</TableCell>
                     <TableCell>{booking.barber?.name || "Profissional Deletado"}</TableCell>
                     <TableCell>{booking.service?.name || "Serviço Deletado"}</TableCell>

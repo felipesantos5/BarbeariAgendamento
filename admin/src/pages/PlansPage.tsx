@@ -5,7 +5,7 @@ import apiClient from "@/services/api";
 
 // Imports de UI e Ícones
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PlusCircle, Edit, Trash2, Loader2 } from "lucide-react";
 import { PriceFormater } from "@/helper/priceFormater";
 
@@ -33,6 +34,8 @@ interface Plan {
   price: number;
   durationInDays: number;
   totalCredits: number;
+  useBarberCommission?: boolean;
+  commissionRate?: number;
 }
 
 interface AdminOutletContext {
@@ -45,6 +48,8 @@ const initialPlanState: Omit<Plan, "_id"> = {
   price: 0,
   durationInDays: 30,
   totalCredits: 1,
+  useBarberCommission: false,
+  commissionRate: 0,
 };
 
 export function PlansPage() {
@@ -85,7 +90,12 @@ export function PlansPage() {
   };
 
   const handleOpenEditPlanDialog = (plan: Plan) => {
-    setCurrentPlan(plan);
+    // Garante que planos antigos sem os campos de comissão tenham valores padrão
+    setCurrentPlan({
+      ...plan,
+      useBarberCommission: plan.useBarberCommission ?? false,
+      commissionRate: plan.commissionRate ?? 0,
+    });
     setIsDialogOpen(true);
   };
 
@@ -137,18 +147,14 @@ export function PlansPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Gerenciar Planos</h1>
-        <Button onClick={handleOpenNewPlanDialog}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Adicionar Plano
-        </Button>
-      </div>
-
       <Card>
-        <CardHeader>
-          <CardTitle>Planos Cadastrados</CardTitle>
-          <CardDescription>Visualize, edite ou remova os planos oferecidos pela sua barbearia.</CardDescription>
+        <CardHeader className="flex flex-row justify-between items-center">
+          <CardTitle>Gerenciar Planos</CardTitle>
+          {/* <CardDescription>Visualize, edite ou remova os planos oferecidos pela sua barbearia.</CardDescription> */}
+          <Button onClick={handleOpenNewPlanDialog} className="max-w-xs">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Adicionar Plano
+          </Button>
         </CardHeader>
         <CardContent>
           {/* TABELA ATUALIZADA */}
@@ -158,6 +164,7 @@ export function PlansPage() {
                 <TableHead>Nome do Plano</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-center">Créditos</TableHead>
+                <TableHead className="text-center">Comissão</TableHead>
                 <TableHead className="text-right">Preço</TableHead>
                 <TableHead className="w-[100px] text-center">Ações</TableHead>
               </TableRow>
@@ -165,9 +172,9 @@ export function PlansPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     {" "}
-                    {/* ColSpan 5 */}
+                    {/* ColSpan 6 */}
                     Carregando...
                   </TableCell>
                 </TableRow>
@@ -176,7 +183,16 @@ export function PlansPage() {
                   <TableRow key={plan._id}>
                     <TableCell className="font-medium">{plan.name}</TableCell>
                     <TableCell className="text-muted-foreground">{plan.description}</TableCell>
-                    <TableCell className="text-center">{plan.totalCredits}</TableCell> {/* NOVO CAMPO */}
+                    <TableCell className="text-center">{plan.totalCredits}</TableCell>
+                    <TableCell className="text-center">
+                      {plan.useBarberCommission ? (
+                        <span className="text-muted-foreground text-xs">Padrão Barbeiro</span>
+                      ) : plan.commissionRate && plan.commissionRate > 0 ? (
+                        `${plan.commissionRate}%`
+                      ) : (
+                        <span className="text-red-600 text-xs">Sem comissão</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">{PriceFormater(plan.price)}</TableCell>
                     <TableCell className="flex justify-center gap-2">
                       <Button variant="outline" size="icon" onClick={() => handleOpenEditPlanDialog(plan)}>
@@ -206,9 +222,9 @@ export function PlansPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     {" "}
-                    {/* ColSpan 5 */}
+                    {/* ColSpan 6 */}
                     Nenhum plano cadastrado.
                   </TableCell>
                 </TableRow>
@@ -290,6 +306,58 @@ export function PlansPage() {
                   placeholder="Ex: 4"
                 />
               </div>
+            </div>
+
+            {/* Configuração de Comissão */}
+            <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+              <Label className="text-base font-semibold">Comissão do Plano</Label>
+
+              {/* Checkbox: Usar comissão padrão do barbeiro */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="useBarberCommission"
+                  checked={currentPlan.useBarberCommission || false}
+                  onCheckedChange={(checked) =>
+                    setCurrentPlan({
+                      ...currentPlan,
+                      useBarberCommission: checked as boolean,
+                    })
+                  }
+                />
+                <label
+                  htmlFor="useBarberCommission"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Usar comissão padrão do barbeiro
+                </label>
+              </div>
+
+              {/* Input de comissão customizada (aparece apenas se checkbox desmarcado) */}
+              {!currentPlan.useBarberCommission && (
+                <div className="space-y-2 pl-6 border-l-2 border-primary/30">
+                  <Label htmlFor="planCommission" className="text-sm">
+                    Comissão Customizada (%)
+                  </Label>
+                  <Input
+                    id="planCommission"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={currentPlan.commissionRate ?? 0}
+                    onChange={(e) =>
+                      setCurrentPlan({
+                        ...currentPlan,
+                        commissionRate: e.target.value ? parseFloat(e.target.value) : 0,
+                      })
+                    }
+                    placeholder="0 = sem comissão"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se 0, o barbeiro não receberá comissão neste plano
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

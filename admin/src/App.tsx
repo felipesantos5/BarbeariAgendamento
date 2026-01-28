@@ -23,6 +23,8 @@ import { ProductManagement } from "./pages/Products.tsx";
 import DashboardMetricsPage from "./pages/DashboardMetricsPage.tsx";
 import { BarberPerformancePage } from "./pages/BarberPerformancePage.tsx";
 import { RecurrencePage } from "./pages/RecurrencePage.tsx";
+import { CheckoutConfigPage } from "./pages/CheckoutConfigPage.tsx";
+import { OperationalCostsPage } from "./pages/OperationalCostsPage.tsx";
 import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
 
@@ -61,11 +63,13 @@ export default function App() {
             <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
               <Route path="metricas" element={<DashboardMetricsPage />} />
               <Route path="configuracoes" element={<BarbeariaConfigPage />} />
+              <Route path="checkout" element={<CheckoutConfigPage />} />
               <Route path="servicos" element={<ServicesPage />} />
               <Route path="funcionarios" element={<BarberPage />} />
               <Route path="planos" element={<PlansPage />} />
               <Route path="produtos" element={<ProductManagement />} />
               <Route path="recorrencia" element={<RecurrencePage />} />
+              <Route path="custos-operacionais" element={<OperationalCostsPage />} />
             </Route>
 
             <Route path="*" element={<>nao encontrado</>} />

@@ -162,9 +162,24 @@ router.get("/", async (req, res) => {
         // Pré-calcula receita e comissão por plano vendido
         $project: {
           planRevenue: "$planInfo.price",
-          // Usa a comissão de SERVIÇO do barbeiro
+          // ✅ Se useBarberCommission = true, usa comissão do barbeiro
+          // ✅ Senão, usa commissionRate do plano (pode ser 0)
           commissionAmount: {
-            $multiply: ["$planInfo.price", { $divide: [{ $ifNull: ["$barberInfo.commission", 0] }, 100] }],
+            $multiply: [
+              "$planInfo.price",
+              {
+                $divide: [
+                  {
+                    $cond: {
+                      if: { $eq: ["$planInfo.useBarberCommission", true] },
+                      then: { $ifNull: ["$barberInfo.commission", 0] },
+                      else: { $ifNull: ["$planInfo.commissionRate", 0] },
+                    },
+                  },
+                  100,
+                ],
+              },
+            ],
           },
         },
       },

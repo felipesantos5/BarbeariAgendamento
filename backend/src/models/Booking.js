@@ -13,7 +13,7 @@ const BookingSchema = new Schema(
     time: Date,
     status: {
       type: String,
-      enum: ["booked", "confirmed", "completed", "canceled", "pending_payment"],
+      enum: ["booked", "confirmed", "completed", "canceled", "pending_payment", "payment_expired"],
       default: "booked",
     },
     paymentStatus: {

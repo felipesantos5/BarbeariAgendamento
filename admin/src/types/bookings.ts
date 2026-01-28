@@ -18,5 +18,5 @@ export interface Booking {
   paymentStatus?: string;
   createdAt?: string;
   time: string;
-  status: "booked" | "confirmed" | "completed" | "canceled";
+  status: "booked" | "confirmed" | "completed" | "canceled" | "pending_payment" | "payment_expired";
 }

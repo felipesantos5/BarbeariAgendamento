@@ -7,6 +7,7 @@ import Customer from "../../models/Customer.js";
 // ✅ CORREÇÃO: Corrigido o caminho da importação
 import StockMovement from "../../models/StockMovement.js";
 import Subscription from "../../models/Subscription.js";
+import OperationalCost from "../../models/OperationalCost.js";
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, isValid } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
@@ -49,7 +50,7 @@ router.get("/", async (req, res) => {
     }
 
     // --- 2. Agregações Principais (em Paralelo) ---
-    const [bookingResults, planResults, productResults] = await Promise.all([
+    const [bookingResults, planResults, planResultsGlobal, productResults, stockEntryResults, operationalCostsResults] = await Promise.all([
       // Agregação 1: Bookings (Serviços)
       Booking.aggregate([
         {
@@ -249,25 +250,61 @@ router.get("/", async (req, res) => {
           $match: {
             barbershop: barbershopMongoId,
             createdAt: { $gte: startDate, $lte: endDate },
+            barber: { $exists: true, $ne: null }, // ✅ CORREÇÃO: Só planos com barbeiro específico
           },
         },
         { $lookup: { from: "plans", localField: "plan", foreignField: "_id", as: "planDetails" } },
         { $lookup: { from: "barbers", localField: "barber", foreignField: "_id", as: "barberDetails" } },
         { $unwind: "$planDetails" },
-        { $unwind: { path: "$barberDetails", preserveNullAndEmptyArrays: true } },
+        { $unwind: "$barberDetails" }, // ✅ CORREÇÃO: Removido preserveNullAndEmptyArrays
         {
           $group: {
-            _id: "$barber", // Agrupa por barbeiro (pode ser null)
+            _id: "$barber",
             totalPlanRevenue: { $sum: "$planDetails.price" },
             totalPlansSold: { $sum: 1 },
             totalPlanCommission: {
               $sum: {
-                $multiply: ["$planDetails.price", { $divide: [{ $ifNull: ["$barberDetails.commission", 0] }, 100] }],
+                $multiply: [
+                  "$planDetails.price",
+                  {
+                    $divide: [
+                      // ✅ Se useBarberCommission = true, usa comissão do barbeiro
+                      // ✅ Senão, usa commissionRate do plano (pode ser 0)
+                      {
+                        $cond: {
+                          if: { $eq: ["$planDetails.useBarberCommission", true] },
+                          then: "$barberDetails.commission",
+                          else: { $ifNull: ["$planDetails.commissionRate", 0] },
+                        },
+                      },
+                      100,
+                    ],
+                  },
+                ],
               },
             },
           },
         },
-      ]), // Fim Agregação 2 (Planos)
+      ]), // Fim Agregação 2 (Planos por Barbeiro)
+
+      // Agregação 2.1: Planos GLOBAIS (com e sem barbeiro) - Para o overview financeiro
+      Subscription.aggregate([
+        {
+          $match: {
+            barbershop: barbershopMongoId,
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        { $lookup: { from: "plans", localField: "plan", foreignField: "_id", as: "planDetails" } },
+        { $unwind: "$planDetails" },
+        {
+          $group: {
+            _id: null,
+            totalPlanRevenue: { $sum: "$planDetails.price" },
+            totalPlansSold: { $sum: 1 },
+          },
+        },
+      ]), // Fim Agregação 2.1 (Planos Globais)
 
       // Agregação 3: Produtos (StockMovements) - Agrupado por barbeiro
       StockMovement.aggregate([
@@ -289,7 +326,13 @@ router.get("/", async (req, res) => {
             totalProductCommission: {
               $sum: {
                 $multiply: [
-                  { $multiply: ["$quantity", "$productDetails.price.sale"] },
+                  // ✅ CORREÇÃO: Comissão sobre o LUCRO (Receita - Custo), não sobre a venda
+                  {
+                    $subtract: [
+                      { $multiply: ["$quantity", "$productDetails.price.sale"] }, // Receita
+                      { $ifNull: ["$totalCost", 0] }, // Custo
+                    ],
+                  },
                   { $divide: [{ $ifNull: ["$productDetails.commissionRate", 0] }, 100] },
                 ],
               },
@@ -297,13 +340,51 @@ router.get("/", async (req, res) => {
           },
         },
       ]), // Fim Agregação 3 (Produtos)
+
+      // Agregação 4: Entradas de Estoque - Total de compras/entradas
+      StockMovement.aggregate([
+        {
+          $match: {
+            barbershop: barbershopMongoId,
+            type: "entrada",
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalPurchaseCost: { $sum: { $ifNull: ["$totalCost", 0] } },
+            totalItemsPurchased: { $sum: "$quantity" },
+          },
+        },
+      ]), // Fim Agregação 4 (Entradas)
+
+      // Agregação 5: Custos Operacionais - Total de despesas operacionais
+      OperationalCost.aggregate([
+        {
+          $match: {
+            barbershop: barbershopMongoId,
+            date: { $gte: startDate, $lte: endDate },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalOperationalCosts: { $sum: "$amount" },
+            totalCostRecords: { $sum: 1 },
+          },
+        },
+      ]), // Fim Agregação 5 (Custos Operacionais)
     ]); // Fim do Promise.all
 
     // --- 3. COMBINAR OS RESULTADOS ---
 
     const bookingData = bookingResults[0];
     const planDataByBarber = planResults;
+    const planDataGlobal = planResultsGlobal[0] || { totalPlanRevenue: 0, totalPlansSold: 0 };
     const productDataByBarber = productResults;
+    const stockEntryData = stockEntryResults[0] || { totalPurchaseCost: 0, totalItemsPurchased: 0 };
+    const operationalCostsData = operationalCostsResults[0] || { totalOperationalCosts: 0, totalCostRecords: 0 };
 
     // --- 4. COMBINAR A TABELA 'barberPerformance' ---
 
@@ -426,15 +507,15 @@ router.get("/", async (req, res) => {
       totalUniqueCustomers: 0,
     };
 
-    const globalPlanData = planDataByBarber.reduce(
-      (acc, cur) => {
-        acc.totalPlanRevenue += cur.totalPlanRevenue;
-        acc.totalPlanCommission += cur.totalPlanCommission;
-        acc.totalPlansSold += cur.totalPlansSold;
-        return acc;
-      },
-      { totalPlanRevenue: 0, totalPlanCommission: 0, totalPlansSold: 0 }
-    );
+    // Calcula comissão total de planos (apenas dos barbeiros específicos)
+    const totalPlanCommission = planDataByBarber.reduce((sum, item) => sum + (item.totalPlanCommission || 0), 0);
+
+    // Usa os dados globais para receita (inclui todos os planos)
+    const globalPlanData = {
+      totalPlanRevenue: planDataGlobal.totalPlanRevenue,
+      totalPlansSold: planDataGlobal.totalPlansSold,
+      totalPlanCommission: totalPlanCommission, // Apenas de barbeiros específicos
+    };
 
     const globalProductData = productDataByBarber.reduce(
       (acc, cur) => {
@@ -451,7 +532,9 @@ router.get("/", async (req, res) => {
     const totalGrossRevenue = overviewData.totalRevenue + globalPlanData.totalPlanRevenue + globalProductData.totalGrossRevenue;
     const totalCommissionsPaid = totalServiceCommission + globalPlanData.totalPlanCommission + globalProductData.totalProductCommission;
     const totalCostOfGoods = globalProductData.totalCostOfGoods;
-    const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalCostOfGoods;
+    const totalOperationalCosts = operationalCostsData.totalOperationalCosts;
+    const totalExpenses = totalCostOfGoods + totalOperationalCosts;
+    const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalExpenses;
 
     // --- 6. Organização da Resposta ---
     const dashboardData = {
@@ -472,17 +555,24 @@ router.get("/", async (req, res) => {
       },
 
       financialOverview: {
+        // Faturamento Bruto
         totalGrossRevenue: totalGrossRevenue,
         revenueFromServices: overviewData.totalRevenue,
         revenueFromPlans: globalPlanData.totalPlanRevenue,
         revenueFromProducts: globalProductData.totalGrossRevenue,
 
+        // Despesas de Comissões
         totalCommissionsPaid: totalCommissionsPaid,
         commissionFromServices: totalServiceCommission,
         commissionFromPlans: globalPlanData.totalPlanCommission,
         commissionFromProducts: globalProductData.totalProductCommission,
 
+        // Despesas (Compra de Produtos + Custos Operacionais)
+        totalExpenses: totalExpenses,
         totalCostOfGoods: totalCostOfGoods,
+        totalOperationalCosts: totalOperationalCosts,
+
+        // Faturamento Líquido
         totalNetRevenue: totalNetRevenue,
       },
 
@@ -497,6 +587,14 @@ router.get("/", async (req, res) => {
       ),
       dailyRevenue: bookingData?.dailyRevenue || [],
       hourlyRevenue: bookingData?.hourlyRevenue || [],
+
+      stockMovement: {
+        totalProductsSold: globalProductData.totalItemsSold,
+        totalProductsPurchased: stockEntryData.totalItemsPurchased,
+        totalPurchaseCost: stockEntryData.totalPurchaseCost,
+        totalSalesRevenue: globalProductData.totalGrossRevenue,
+        netProductRevenue: globalProductData.totalGrossRevenue - globalProductData.totalCostOfGoods,
+      },
     };
 
     res.status(200).json(dashboardData);

@@ -54,7 +54,7 @@ interface Booking {
 interface PopulatedBooking {
   _id: string;
   time: string; // Vem como string no formato ISO da API
-  status: "booked" | "confirmed" | "completed" | "canceled";
+  status: "booked" | "confirmed" | "completed" | "canceled" | "pending_payment" | "payment_expired";
   review?: string; // ID da avaliação, se houver
 
   // Campos que foram populados e podem ser nulos se o item original foi deletado
@@ -162,8 +162,6 @@ export function AgendamentosPage() {
     // Não precisamos mais ler o token do localStorage para a conexão SSE
     // O navegador cuidará de enviar o cookie 'adminAuthToken' automaticamente
     // se ele estiver presente para o domínio do backend.
-
-    console.log("[SSE] Tentando conectar ao stream (com credenciais)...");
 
     // 1. URL base do SSE, sem token na query string
     const sseUrl = `${API_BASE_URL}/barbershops/${barbershopId}/bookings/stream`;
@@ -575,7 +573,7 @@ export function AgendamentosPage() {
   return (
     <Card className="gap-2 md:gap-8">
       <CardHeader className="flex justify-between">
-        <div className="flex gap-4 items-center flex-wrap">
+        <div className="flex gap-8 items-center flex-wrap">
           <CardTitle>Agendamentos</CardTitle>
           <div className="flex-wrap flex gap-2 items-center">
             <Label className="text-sm font-medium">Filtrar por Profissional</Label>
@@ -634,15 +632,14 @@ export function AgendamentosPage() {
                       className={`
                                 flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors
                                 ${/* --- 2. NOVA LÓGICA DE CLASSES --- */ ""}
-                                ${
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2" // Prioridade 1: Dia selecionado
-                                    : isPast
-                                    ? "text-muted-foreground opacity-75 hover:bg-accent" // Prioridade 2: Dia passado
-                                    : isToday(day)
-                                    ? "bg-accent text-accent-foreground" // Prioridade 3: Dia de hoje
-                                    : "hover:bg-accent"
-                                }
+                                ${isSelected
+                          ? "bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2" // Prioridade 1: Dia selecionado
+                          : isPast
+                            ? "text-muted-foreground opacity-75 hover:bg-accent" // Prioridade 2: Dia passado
+                            : isToday(day)
+                              ? "bg-accent text-accent-foreground" // Prioridade 3: Dia de hoje
+                              : "hover:bg-accent"
+                        }
                               `}
                     >
                       {day}

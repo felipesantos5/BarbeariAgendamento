@@ -129,14 +129,14 @@ const cleanupPendingPayments = async () => {
       },
       {
         $set: {
-          status: "canceled",
+          status: "payment_expired", // ✅ Novo status específico
           paymentStatus: "canceled",
         },
       }
     );
 
     if (result.modifiedCount > 0) {
-      console.log(`[CRON] Limpeza: ${result.modifiedCount} agendamentos pendentes foram cancelados.`);
+      console.log(`[CRON] Limpeza: ${result.modifiedCount} agendamentos expirados por falta de pagamento.`);
     }
   } catch (error) {
     console.error("[CRON] Erro ao limpar agendamentos pendentes:", error.message);
