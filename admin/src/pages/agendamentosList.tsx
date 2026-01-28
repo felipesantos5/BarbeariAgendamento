@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock, CalendarDays } from "lucide-react";
 import { Booking } from "@/types/bookings";
 import { translatePaymentStatus } from "@/helper/translatePaymentStatus";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
@@ -245,7 +245,7 @@ export const AgendamentosList = () => {
                 <TableHead>Serviço</TableHead>
                 <TableHead>Pagamento</TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead className="text-right">Data & Hora</TableHead>
+                <TableHead className="text-right">Datas & Horários</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -265,17 +265,43 @@ export const AgendamentosList = () => {
                     <TableCell className="">
                       {booking.service ? PriceFormater(booking.service.price) : "N/A"}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {format(new Date(booking.time), "dd/MM/yyyy 'às' HH:mm", {
-                        locale: ptBR,
-                      })}
+                    <TableCell className="text-right">
+                      <div className="space-y-2">
+                        {/* Data do Corte */}
+                        <div className="flex items-center justify-end gap-2">
+                          <CalendarDays className="h-4 w-4 text-primary" />
+                          <div className="text-right">
+                            <div className="text-xs font-semibold text-primary">Corte</div>
+                            <div className="text-xs">
+                              {format(new Date(booking.time), "dd/MM/yyyy 'às' HH:mm", {
+                                locale: ptBR,
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Data que foi agendado */}
+                        {booking.createdAt && (
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <div className="text-right">
+                              <div className="text-xs font-semibold text-blue-600">Agendado</div>
+                              <div className="text-xs text-muted-foreground">
+                                {format(new Date(booking.createdAt), "dd/MM/yyyy 'às' HH:mm", {
+                                  locale: ptBR,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
 
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     Nenhum agendamento encontrado.
                   </TableCell>
                 </TableRow>

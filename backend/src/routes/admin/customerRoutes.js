@@ -83,6 +83,14 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
         $project: {
           customerDetails: 1,
           lastBookingTime: { $max: "$bookingsForShop.time" },
+          // Campo auxiliar para garantir que nulls fiquem no final
+          hasBookings: {
+            $cond: {
+              if: { $gt: [{ $size: "$bookingsForShop" }, 0] },
+              then: 1,
+              else: 0,
+            },
+          },
         },
       },
     ];
@@ -130,9 +138,13 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
 
     // --- Paginação e Projeção Final ---
     pipeline.push(
-      // 8. Ordenar (Clientes novos com lastBookingTime: null irão para o fim)
+      // 8. Ordenar: primeiro por hasBookings (clientes com agendamentos no topo),
+      //    depois por lastBookingTime (mais recentes primeiro)
       {
-        $sort: { lastBookingTime: -1 },
+        $sort: {
+          hasBookings: -1,        // 1 (tem agendamentos) vem antes de 0 (sem agendamentos)
+          lastBookingTime: -1     // Dentro de cada grupo, mais recente primeiro
+        },
       },
       // 9. Facet
       {
@@ -413,6 +425,53 @@ router.get("/:customerId/bookings", protectAdmin, requireRole("admin", "barber")
   } catch (error) {
     console.error("Erro ao buscar agendamentos do cliente:", error);
     res.status(500).json({ error: "Erro ao buscar agendamentos do cliente." });
+  }
+});
+
+// DELETE /:customerId/subscriptions/:subscriptionId
+// Remove/Cancela uma assinatura de um cliente
+router.delete("/:customerId/subscriptions/:subscriptionId", protectAdmin, requireRole("admin"), async (req, res) => {
+  try {
+    const { barbershopId, customerId, subscriptionId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(customerId) || !mongoose.Types.ObjectId.isValid(subscriptionId)) {
+      return res.status(400).json({ error: "ID do cliente ou assinatura inválido." });
+    }
+
+    // Busca a assinatura
+    const subscription = await Subscription.findById(subscriptionId);
+
+    if (!subscription) {
+      return res.status(404).json({ error: "Assinatura não encontrada." });
+    }
+
+    // Valida se a assinatura pertence a esta barbearia
+    if (subscription.barbershop.toString() !== barbershopId) {
+      return res.status(403).json({ error: "Esta assinatura não pertence a esta barbearia." });
+    }
+
+    // Valida se a assinatura pertence ao cliente
+    if (subscription.customer.toString() !== customerId) {
+      return res.status(403).json({ error: "Esta assinatura não pertence a este cliente." });
+    }
+
+    // Cancela a assinatura (marca como canceled ao invés de deletar)
+    subscription.status = "canceled";
+    await subscription.save();
+
+    // Remove a referência da assinatura no array do customer
+    await Customer.findByIdAndUpdate(customerId, {
+      $pull: { subscriptions: subscriptionId },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Assinatura cancelada com sucesso.",
+      subscription,
+    });
+  } catch (error) {
+    console.error("Erro ao cancelar assinatura:", error);
+    res.status(500).json({ error: "Erro ao cancelar assinatura." });
   }
 });
 

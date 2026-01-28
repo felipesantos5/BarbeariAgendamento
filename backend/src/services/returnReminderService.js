@@ -137,25 +137,40 @@ export const sendAutomatedReturnReminders = async () => {
       }
 
       // 5. Envia as mensagens e atualiza o histórico do cliente
+      let sentCount = 0;
       for (const customer of customers) {
         // --- 6. CRIA A MENSAGEM E O LINK DINAMICAMENTE ---
         const agendamentoLink = `${BASE_URL}/${barbershop.slug}`;
 
         const message = `Olá, ${customer.name}! Sentimos sua falta na ${barbershop.name}. Já faz ${DAYS_SINCE_LAST_CUT} dias desde seu último corte. 💈\n\nQue tal agendar seu retorno?\n${agendamentoLink}`;
 
-        try {
-          await sendWhatsAppConfirmation(customer.phone, message);
+        const result = await sendWhatsAppConfirmation(customer.phone, message);
 
-          // So registra o envio se a mensagem foi processada sem erro
+        if (result.success) {
+          sentCount++;
+          // Só registra o envio se a mensagem foi enviada com sucesso
           await Customer.updateOne(
             { _id: customer._id },
             { $push: { returnReminders: { sentAt: new Date() } } }
           );
-        } catch (err) {
-          console.error(`[CRON] Falha ao enviar lembrete de retorno para ${customer.phone}:`, err.message);
+        } else if (result.blocked) {
+          // Circuit breaker bloqueou - para de tentar enviar
+          console.log(
+            `[CRON] Circuit breaker bloqueou lembretes de retorno. ` +
+            `Enviados: ${sentCount}/${customers.length} para ${barbershop.name}. ` +
+            `Próxima tentativa em ${result.retryIn}s.`
+          );
+          break; // Sai do loop desta barbearia
         }
 
-        await delay(5000 + Math.random() * 5000);
+        // Pausa entre mensagens (apenas se não estiver bloqueado)
+        if (!result.blocked) {
+          await delay(5000 + Math.random() * 5000);
+        }
+      }
+
+      if (sentCount > 0) {
+        console.log(`-> Enviados ${sentCount}/${customers.length} lembretes para ${barbershop.name}.`);
       }
     }
   } catch (error) {

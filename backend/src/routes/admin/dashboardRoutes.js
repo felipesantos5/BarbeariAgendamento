@@ -50,7 +50,7 @@ router.get("/", async (req, res) => {
     }
 
     // --- 2. Agregações Principais (em Paralelo) ---
-    const [bookingResults, planResults, planResultsGlobal, productResults, stockEntryResults, operationalCostsResults] = await Promise.all([
+    const [bookingResults, planResults, planResultsGlobal, planStatsResults, bookingsWithPlansResults, productResults, stockEntryResults, operationalCostsResults] = await Promise.all([
       // Agregação 1: Bookings (Serviços)
       Booking.aggregate([
         {
@@ -306,6 +306,87 @@ router.get("/", async (req, res) => {
         },
       ]), // Fim Agregação 2.1 (Planos Globais)
 
+      // Agregação 2.2: Estatísticas de Planos (para cards de planos)
+      Subscription.aggregate([
+        {
+          $facet: {
+            // Planos ativos no período (status = active e que estão dentro do período)
+            activePlans: [
+              {
+                $match: {
+                  barbershop: barbershopMongoId,
+                  status: "active",
+                  $or: [
+                    // Plano criado antes do período e ainda ativo
+                    { createdAt: { $lt: endDate }, expiresAt: { $gte: startDate } },
+                    // Plano criado durante o período
+                    { createdAt: { $gte: startDate, $lte: endDate } },
+                  ],
+                },
+              },
+              { $count: "count" },
+            ],
+            // Novos planos vendidos no período
+            newPlansSold: [
+              {
+                $match: {
+                  barbershop: barbershopMongoId,
+                  createdAt: { $gte: startDate, $lte: endDate },
+                },
+              },
+              { $lookup: { from: "plans", localField: "plan", foreignField: "_id", as: "planDetails" } },
+              { $unwind: "$planDetails" },
+              {
+                $group: {
+                  _id: null,
+                  count: { $sum: 1 },
+                  revenue: { $sum: "$planDetails.price" },
+                },
+              },
+            ],
+          },
+        },
+      ]), // Fim Agregação 2.2 (Estatísticas de Planos)
+
+      // Agregação 2.3: Agendamentos feitos por clientes com planos ativos
+      Booking.aggregate([
+        {
+          $match: {
+            barbershop: barbershopMongoId,
+            time: { $gte: startDate, $lte: endDate },
+            status: "completed",
+          },
+        },
+        {
+          $lookup: {
+            from: "subscriptions",
+            let: { customerId: "$customer", bookingTime: "$time" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$customer", "$$customerId"] },
+                      { $eq: ["$barbershop", barbershopMongoId] },
+                      { $eq: ["$status", "active"] },
+                      { $lte: ["$createdAt", "$$bookingTime"] },
+                      { $gte: ["$expiresAt", "$$bookingTime"] },
+                    ],
+                  },
+                },
+              },
+            ],
+            as: "activePlans",
+          },
+        },
+        {
+          $match: {
+            activePlans: { $ne: [] },
+          },
+        },
+        { $count: "count" },
+      ]), // Fim Agregação 2.3 (Agendamentos com Planos)
+
       // Agregação 3: Produtos (StockMovements) - Agrupado por barbeiro
       StockMovement.aggregate([
         {
@@ -382,6 +463,8 @@ router.get("/", async (req, res) => {
     const bookingData = bookingResults[0];
     const planDataByBarber = planResults;
     const planDataGlobal = planResultsGlobal[0] || { totalPlanRevenue: 0, totalPlansSold: 0 };
+    const planStatsData = planStatsResults[0] || { activePlans: [], newPlansSold: [] };
+    const bookingsWithPlansData = bookingsWithPlansResults[0] || { count: 0 };
     const productDataByBarber = productResults;
     const stockEntryData = stockEntryResults[0] || { totalPurchaseCost: 0, totalItemsPurchased: 0 };
     const operationalCostsData = operationalCostsResults[0] || { totalOperationalCosts: 0, totalCostRecords: 0 };
@@ -536,6 +619,13 @@ router.get("/", async (req, res) => {
     const totalExpenses = totalCostOfGoods + totalOperationalCosts;
     const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalExpenses;
 
+    // --- 5.1 Estatísticas de Planos ---
+    const activePlansCount = planStatsData.activePlans[0]?.count || 0;
+    const newPlansSoldData = planStatsData.newPlansSold[0] || { count: 0, revenue: 0 };
+    const bookingsWithPlansCount = bookingsWithPlansData.count || 0;
+    const completedBookingsCount = overviewData.completedBookings || 0;
+    const usageRate = completedBookingsCount > 0 ? (bookingsWithPlansCount / completedBookingsCount) * 100 : 0;
+
     // --- 6. Organização da Resposta ---
     const dashboardData = {
       period: {
@@ -585,6 +675,13 @@ router.get("/", async (req, res) => {
         },
         { new: 0, returning: 0 }
       ),
+      planStats: {
+        activePlans: activePlansCount,
+        newPlansSold: newPlansSoldData.count,
+        planRevenue: newPlansSoldData.revenue,
+        bookingsWithPlans: bookingsWithPlansCount,
+        usageRate: usageRate,
+      },
       dailyRevenue: bookingData?.dailyRevenue || [],
       hourlyRevenue: bookingData?.hourlyRevenue || [],
 

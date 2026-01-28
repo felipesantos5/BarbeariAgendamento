@@ -75,18 +75,27 @@ const sendDailyReminders = async (triggerHour) => {
       const greeting = triggerHour === 8 ? "Bom dia" : "Ola";
       const message = `${greeting}, ${booking.customer.name}! Lembrete do seu agendamento hoje na ${booking.barbershop.name} as ${appointmentTimeFormatted} com ${booking.barber.name}\n\nPara mais informacoes, entre em contato com a barbearia: ${booking.barbershop.contact}\nEndereco: ${barberShopAdress}`;
 
-      try {
-        await sendWhatsAppConfirmation(customerPhone, message);
-        sentCount++;
-      } catch (err) {
-        console.error(`[CRON] Falha ao enviar lembrete para ${customerPhone}:`, err.message);
-      }
+      const result = await sendWhatsAppConfirmation(customerPhone, message);
 
-      // Pausa aleatoria
-      const MIN_DELAY = 5000;
-      const MAX_DELAY = 15000;
-      const randomDelay = Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
-      await delay(randomDelay);
+      if (result.success) {
+        sentCount++;
+      } else if (result.blocked) {
+        // Circuit breaker bloqueou - para de tentar enviar
+        console.log(
+          `[CRON] Circuit breaker bloqueou envios. Parando tentativas. ` +
+          `Enviados: ${sentCount}/${bookings.length}. Próxima tentativa em ${result.retryIn}s.`
+        );
+        break; // Sai do loop - não adianta continuar tentando
+      }
+      // Se falhou mas não está bloqueado, continua tentando os próximos
+
+      // Pausa aleatória entre mensagens (apenas se não estiver bloqueado)
+      if (!result.blocked) {
+        const MIN_DELAY = 5000;
+        const MAX_DELAY = 15000;
+        const randomDelay = Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
+        await delay(randomDelay);
+      }
     }
 
     console.log(`[CRON] Lembretes enviados: ${sentCount}/${bookings.length}`);

@@ -494,7 +494,7 @@ router.get("/:subscriptionId/check-status", protectAdmin, async (req, res) => {
 });
 
 // POST /api/barbershops/:barbershopId/subscriptions/setup-webhook
-// Configura webhook automaticamente no Mercado Pago (para admin)
+// Retorna instruções de como configurar webhook no Mercado Pago (para admin)
 router.post("/setup-webhook", protectAdmin, async (req, res) => {
   try {
     const { barbershopId } = req.params;
@@ -511,60 +511,32 @@ router.post("/setup-webhook", protectAdmin, async (req, res) => {
       });
     }
 
-    const webhookUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
+    const webhookUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook`;
 
-    // Fazer requisição para a API do Mercado Pago
-    const axios = (await import("axios")).default;
-
-    try {
-      // Criar webhook para assinaturas
-      const response = await axios.post(
-        "https://api.mercadopago.com/v1/webhooks",
-        {
-          url: webhookUrl,
-          events: [
-            { topic: "payment" },
-            { topic: "subscription_preapproval" },
-            { topic: "subscription_authorized_payment" },
-          ],
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${barbershop.mercadoPagoAccessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      res.json({
-        success: true,
-        message: "Webhook configurado com sucesso no Mercado Pago!",
-        webhook: {
-          id: response.data.id,
-          url: webhookUrl,
-          events: response.data.events,
-        },
-      });
-    } catch (mpError) {
-      console.error("Erro ao criar webhook no MP:", mpError.response?.data || mpError.message);
-
-      // Se já existe um webhook com essa URL
-      if (mpError.response?.status === 400 && mpError.response?.data?.message?.includes("already exists")) {
-        return res.status(200).json({
-          success: true,
-          message: "Webhook já está configurado no Mercado Pago.",
-          alreadyExists: true,
-        });
-      }
-
-      return res.status(500).json({
-        error: "Erro ao configurar webhook no Mercado Pago.",
-        details: mpError.response?.data?.message || mpError.message,
-      });
-    }
+    // O Mercado Pago não oferece API pública para criar webhooks programaticamente
+    // A configuração deve ser feita através do painel de desenvolvedor
+    res.json({
+      success: true,
+      message: "Instruções para configurar webhook no Mercado Pago",
+      instructions: {
+        step1: "Acesse o Painel de Aplicações do Mercado Pago",
+        step2: "Selecione sua aplicação",
+        step3: "No menu lateral, clique em 'Webhooks' > 'Configurar notificações'",
+        step4: "Cole a URL abaixo no campo 'URL de produção' (IMPORTANTE: Configure no MODO DE PRODUÇÃO)",
+        step5: "Selecione os eventos: Pagamentos, Planos e Assinaturas",
+        step6: "Clique em 'Salvar' para gerar a assinatura secreta",
+      },
+      webhookUrl: webhookUrl,
+      events: [
+        "Pagamentos",
+        "Planos e Assinaturas",
+      ],
+      note: "Após configurar, os pagamentos e assinaturas criados automaticamente enviarão notificações para esta URL.",
+      dashboardLink: "https://www.mercadopago.com.br/developers/panel/app",
+    });
   } catch (error) {
-    console.error("Erro ao configurar webhook:", error);
-    res.status(500).json({ error: "Falha ao configurar webhook." });
+    console.error("Erro ao gerar instruções de webhook:", error);
+    res.status(500).json({ error: "Falha ao gerar instruções de webhook." });
   }
 });
 

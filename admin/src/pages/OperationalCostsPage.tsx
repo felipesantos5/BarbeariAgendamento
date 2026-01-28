@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { toast } from "sonner";
 import apiClient from "@/services/api";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // Imports de UI e Ícones
@@ -94,11 +94,28 @@ export function OperationalCostsPage() {
     try {
       setIsLoading(true);
 
-      // Calcula o intervalo de datas baseado no mês/ano selecionado
-      const year = parseInt(selectedYear);
-      const month = parseInt(selectedMonth) - 1; // JavaScript months are 0-indexed
-      const startDate = startOfMonth(new Date(year, month));
-      const endDate = endOfMonth(new Date(year, month));
+      let startDate: Date;
+      let endDate: Date;
+
+      // "Todos os Anos" selecionado
+      if (selectedYear === "all") {
+        const currentDate = new Date();
+        startDate = new Date(currentDate.getFullYear() - 10, 0, 1); // Últimos 10 anos
+        endDate = new Date(currentDate.getFullYear(), 11, 31);
+      }
+      // "Ano Completo" selecionado
+      else if (selectedMonth === "0") {
+        const year = parseInt(selectedYear);
+        startDate = startOfYear(new Date(year, 0));
+        endDate = endOfYear(new Date(year, 0));
+      }
+      // Mês específico selecionado
+      else {
+        const year = parseInt(selectedYear);
+        const month = parseInt(selectedMonth) - 1; // JavaScript months are 0-indexed
+        startDate = startOfMonth(new Date(year, month));
+        endDate = endOfMonth(new Date(year, month));
+      }
 
       const params: any = {
         startDate: format(startDate, "yyyy-MM-dd"),
@@ -207,6 +224,17 @@ export function OperationalCostsPage() {
 
   const availableYears = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
 
+  // Função para formatar o período exibido
+  const formatPeriodDisplay = (): string => {
+    if (selectedYear === "all") {
+      return "Todos os Anos";
+    }
+    if (selectedMonth === "0") {
+      return `Ano Completo de ${selectedYear}`;
+    }
+    return `${monthNames[parseInt(selectedMonth) - 1]} de ${selectedYear}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -222,6 +250,7 @@ export function OperationalCostsPage() {
                   {name}
                 </SelectItem>
               ))}
+              <SelectItem value="0">Ano Completo</SelectItem>
             </SelectContent>
           </Select>
           <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -234,6 +263,7 @@ export function OperationalCostsPage() {
                   {year}
                 </SelectItem>
               ))}
+              <SelectItem value="all">Todos os Anos</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={handleOpenNewCostDialog}>
@@ -253,7 +283,7 @@ export function OperationalCostsPage() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{PriceFormater(totalCosts)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {monthNames[parseInt(selectedMonth) - 1]} de {selectedYear}
+              {formatPeriodDisplay()}
             </p>
           </CardContent>
         </Card>
@@ -266,7 +296,7 @@ export function OperationalCostsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{costs.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Custos em {monthNames[parseInt(selectedMonth) - 1]}
+              Custos no período
             </p>
           </CardContent>
         </Card>
@@ -278,7 +308,7 @@ export function OperationalCostsPage() {
             <div>
               <CardTitle>Custos Cadastrados</CardTitle>
               <CardDescription>
-                {monthNames[parseInt(selectedMonth) - 1]} de {selectedYear}
+                {formatPeriodDisplay()}
                 {selectedType !== "all" && ` - ${getTypeLabel(selectedType)}`}
               </CardDescription>
             </div>

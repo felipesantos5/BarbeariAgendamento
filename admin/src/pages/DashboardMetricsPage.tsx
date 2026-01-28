@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
 import { DateRange } from "react-day-picker";
-import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,6 +117,15 @@ interface CustomerStats {
   returning: number;
 }
 
+// Estatísticas de planos
+interface PlanStats {
+  activePlans: number;
+  newPlansSold: number;
+  planRevenue: number;
+  bookingsWithPlans: number;
+  usageRate: number;
+}
+
 // Faturamento diário
 interface DailyRevenue {
   date: string;
@@ -148,6 +157,7 @@ interface DashboardMetricsData {
   barberPerformance: BarberPerformance[];
   servicePerformance: ServicePerformance[];
   customerStats: CustomerStats;
+  planStats: PlanStats;
   dailyRevenue: DailyRevenue[];
   hourlyRevenue: HourlyRevenue[];
   stockMovement: StockMovement;
@@ -210,11 +220,28 @@ export default function DashboardMetricsPage() {
     let end: Date | undefined;
 
     if (filterMode === "month") {
-      const yearNum = parseInt(selectedYear, 10);
-      const monthNum = parseInt(selectedMonth, 10) - 1;
-      if (!isNaN(yearNum) && !isNaN(monthNum)) {
-        start = startOfMonth(new Date(yearNum, monthNum));
-        end = endOfMonth(new Date(yearNum, monthNum));
+      // "Todos os Anos" selecionado
+      if (selectedYear === "all") {
+        const currentDate = new Date();
+        start = new Date(currentDate.getFullYear() - 10, 0, 1); // Últimos 10 anos
+        end = new Date(currentDate.getFullYear(), 11, 31);
+      }
+      // "Ano Completo" selecionado
+      else if (selectedMonth === "0") {
+        const yearNum = parseInt(selectedYear, 10);
+        if (!isNaN(yearNum)) {
+          start = startOfYear(new Date(yearNum, 0));
+          end = endOfYear(new Date(yearNum, 0));
+        }
+      }
+      // Mês específico selecionado
+      else {
+        const yearNum = parseInt(selectedYear, 10);
+        const monthNum = parseInt(selectedMonth, 10) - 1;
+        if (!isNaN(yearNum) && !isNaN(monthNum)) {
+          start = startOfMonth(new Date(yearNum, monthNum));
+          end = endOfMonth(new Date(yearNum, monthNum));
+        }
       }
     } else if (filterMode === "range" && dateRange?.from && dateRange?.to) {
       start = dateRange.from;
@@ -245,6 +272,18 @@ export default function DashboardMetricsPage() {
 
   const formatActivePeriodDisplay = (): string => {
     if (filterMode === "month") {
+      // "Todos os Anos" selecionado
+      if (selectedYear === "all") {
+        return "Todos os Anos";
+      }
+      // "Ano Completo" selecionado
+      if (selectedMonth === "0") {
+        const yearNum = parseInt(selectedYear, 10);
+        if (!isNaN(yearNum)) {
+          return `Ano Completo de ${yearNum}`;
+        }
+      }
+      // Mês específico selecionado
       const yearNum = parseInt(selectedYear, 10);
       const monthNum = parseInt(selectedMonth, 10) - 1;
       if (!isNaN(yearNum) && !isNaN(monthNum) && monthNum >= 0 && monthNum < 12) {
@@ -320,6 +359,7 @@ export default function DashboardMetricsPage() {
                         {name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="0">Ano Completo</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select
@@ -338,6 +378,7 @@ export default function DashboardMetricsPage() {
                         {year}
                       </SelectItem>
                     ))}
+                    <SelectItem value="all">Todos os Anos</SelectItem>
                   </SelectContent>
                 </Select>
                 <Popover>
@@ -735,10 +776,56 @@ export default function DashboardMetricsPage() {
 
               <Separator className="my-6" />
 
+              {/* Grupo de Planos e Assinaturas */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                  <Package size={20} /> Planos e Assinaturas
+                </h3>
+                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+                  <MetricCard
+                    title="Planos Ativos"
+                    value={data.planStats.activePlans}
+                    icon={Package}
+                    description="Assinaturas ativas no período"
+                    valueClassName="text-blue-600"
+                  />
+                  <MetricCard
+                    title="Novos Planos"
+                    value={data.planStats.newPlansSold}
+                    icon={PackagePlus}
+                    description="Planos vendidos no período"
+                    valueClassName="text-green-600"
+                  />
+                  <MetricCard
+                    title="Receita de Planos"
+                    value={PriceFormater(data.planStats.planRevenue)}
+                    icon={DollarSign}
+                    description="Valor total gerado"
+                    valueClassName="text-emerald-600"
+                  />
+                  <MetricCard
+                    title="Agendamentos com Planos"
+                    value={data.planStats.bookingsWithPlans}
+                    icon={ClipboardCheck}
+                    description="Atendimentos de clientes com planos"
+                    valueClassName="text-purple-600"
+                  />
+                  <MetricCard
+                    title="Taxa de Utilização"
+                    value={`${data.planStats.usageRate.toFixed(1)}%`}
+                    icon={BadgePercent}
+                    description="% de agendamentos com planos"
+                    valueClassName="text-indigo-600"
+                  />
+                </div>
+              </div>
+
+              <Separator className="my-6" />
+
               {/* Grupo de Movimentação de Estoque */}
               <div>
                 <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                  <Package size={20} /> Movimentação de Estoque
+                  <ShoppingCart size={20} /> Movimentação de Estoque
                 </h3>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                   <MetricCard

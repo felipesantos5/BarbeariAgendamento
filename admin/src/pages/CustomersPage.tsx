@@ -33,14 +33,15 @@ import {
   History,
   Contact,
   CreditCard,
-  Plus, // ✅ Adicionado
+  Plus,
+  Trash2,
+  Clock,
 } from "lucide-react";
 import { PhoneFormat } from "@/helper/phoneFormater";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { dateFormatter } from "@/helper/dateFormatter";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { API_BASE_URL } from "@/config/BackendUrl";
 import { PriceFormater } from "@/helper/priceFormater";
@@ -66,7 +67,7 @@ interface Plan {
 
 interface Subscription {
   _id: string;
-  status: "active" | "expired" | "cancelled";
+  status: "active" | "expired" | "canceled" | "pending";
   startDate: string;
   endDate: string;
   plan: Plan;
@@ -141,6 +142,11 @@ export function CustomersPage() {
     name: "",
     phone: "",
   });
+
+  // Estados para Remover Plano
+  const [isRemovePlanModalOpen, setIsRemovePlanModalOpen] = useState(false);
+  const [selectedSubscriptionToRemove, setSelectedSubscriptionToRemove] = useState<{ subscriptionId: string; customerId: string; planName: string } | null>(null);
+  const [isRemovingPlan, setIsRemovingPlan] = useState(false);
 
   // --- Funções de Fetch ---
   const fetchPageData = useCallback(
@@ -237,6 +243,34 @@ export function CustomersPage() {
       toast.error(apiError);
     } finally {
       setIsSubscribing(false);
+    }
+  };
+
+  // Função para abrir modal de remover plano
+  const handleOpenRemovePlanModal = (subscriptionId: string, customerId: string, planName: string) => {
+    setSelectedSubscriptionToRemove({ subscriptionId, customerId, planName });
+    setIsRemovePlanModalOpen(true);
+  };
+
+  // Função para remover plano
+  const handleRemovePlan = async () => {
+    if (!selectedSubscriptionToRemove) return;
+
+    setIsRemovingPlan(true);
+    try {
+      await apiClient.delete(
+        `${API_BASE_URL}/api/barbershops/${barbershopId}/admin/customers/${selectedSubscriptionToRemove.customerId}/subscriptions/${selectedSubscriptionToRemove.subscriptionId}`
+      );
+
+      toast.success("Plano removido com sucesso!");
+      setIsRemovePlanModalOpen(false);
+      setSelectedSubscriptionToRemove(null);
+      fetchPageData(currentPage);
+    } catch (error: any) {
+      console.error("Erro ao remover plano:", error);
+      toast.error(error.response?.data?.error || "Erro ao remover plano.");
+    } finally {
+      setIsRemovingPlan(false);
     }
   };
 
@@ -353,18 +387,36 @@ export function CustomersPage() {
 
   const getLastBookingBadge = (lastBookingTime: string | undefined) => {
     if (!lastBookingTime) {
-      return <Badge variant="outline">Nunca agendou</Badge>;
+      return <Badge variant="outline" className="text-muted-foreground">Nunca agendou</Badge>;
     }
     try {
       const lastDate = new Date(lastBookingTime);
       const today = new Date();
       const daysAgo = differenceInDays(today, lastDate);
 
+      // Define a cor do badge baseado em quão recente foi
+      let badgeVariant: "default" | "secondary" | "outline" = "secondary";
+      let badgeClassName = "";
+
+      if (daysAgo === 0) {
+        badgeVariant = "default";
+        badgeClassName = "bg-green-600 hover:bg-green-700";
+      } else if (daysAgo <= 7) {
+        badgeVariant = "default";
+        badgeClassName = "bg-blue-600 hover:bg-blue-700";
+      } else if (daysAgo <= 30) {
+        badgeVariant = "secondary";
+      } else {
+        badgeVariant = "outline";
+      }
+
       return (
-        <div className="flex flex-col gap-1">
-          <Badge variant="secondary">{formatDateTime(lastBookingTime)}</Badge>
-          <span className="text-xs text-muted-foreground">
-            {daysAgo === 0 ? "Hoje" : daysAgo === 1 ? "Há 1 dia" : `Há ${daysAgo} dias`}
+        <div className="flex items-center gap-2">
+          <Badge variant={badgeVariant} className={badgeClassName}>
+            {formatDateTime(lastBookingTime)}
+          </Badge>
+          <span className={`text-xs ${daysAgo <= 7 ? "text-green-600 font-medium" : "text-muted-foreground"}`}>
+            {daysAgo === 0 ? "Hoje ⭐" : daysAgo === 1 ? "Há 1 dia" : `Há ${daysAgo} dias`}
           </span>
         </div>
       );
@@ -592,8 +644,23 @@ export function CustomersPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handleOpenSubscribeModal(customer)}>
+                                <Plus className="h-4 w-4 mr-2" />
                                 {activeSubscriptions.length > 0 ? "Adicionar Novo Plano" : "Atribuir Plano"}
                               </DropdownMenuItem>
+                              {activeSubscriptions.length > 0 && (
+                                <>
+                                  {activeSubscriptions.map((subscription) => (
+                                    <DropdownMenuItem
+                                      key={subscription._id}
+                                      onClick={() => handleOpenRemovePlanModal(subscription._id, customer._id, subscription.plan.name)}
+                                      className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Remover "{subscription.plan.name}"
+                                    </DropdownMenuItem>
+                                  ))}
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -714,7 +781,9 @@ export function CustomersPage() {
               <History className="h-5 w-5" />
               Histórico de Agendamentos - {selectedCustomerForBookings?.name}
             </DialogTitle>
-            <DialogDescription>Visualize todos os agendamentos realizados por este cliente ({customerBookings.length} encontrados)</DialogDescription>
+            <DialogDescription>
+              Visualize todos os agendamentos realizados por este cliente ({customerBookings.length} encontrado{customerBookings.length !== 1 ? "s" : ""})
+            </DialogDescription>
           </DialogHeader>
           <div className="mt-4">
             {isLoadingBookings ? (
@@ -727,31 +796,46 @@ export function CustomersPage() {
                 <div className="space-y-4">
                   {customerBookings.map((booking) => (
                     <Card key={booking._id} className="p-4 bg-secondary/30">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <CalendarDays className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="font-medium">{formatDateTime(booking.time)}</span>
-                            {getStatusBadge(booking.status)}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Scissors className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-sm">
-                              <strong>Serviço:</strong> {booking.service?.name || "N/A"}
-                            </span>
-                            {booking.service && <p className="text-xs text-green-700 font-semibold">{PriceFormater(booking.service.price)}</p>}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <span className="text-sm">
-                              <strong>Profissional:</strong> {booking.barber?.name || "N/A"}
-                            </span>
-                          </div>
+                      <div className="space-y-3">
+                        {/* Header: Status Badge */}
+                        <div className="flex justify-end">
+                          {getStatusBadge(booking.status)}
                         </div>
+
+                        {/* Linha 1: Horário do Corte (quando vai acontecer) */}
+                        <div className="bg-primary/5 p-3 rounded-md border border-primary/20">
+                          <div className="flex items-center gap-2 mb-1">
+                            <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
+                            <span className="text-xs font-semibold text-primary uppercase">Horário do Corte</span>
+                          </div>
+                          <span className="text-lg font-bold">{formatDateTime(booking.time)}</span>
+                        </div>
+
+                        {/* Linha 2: Serviço */}
+                        <div className="flex items-center gap-2">
+                          <Scissors className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm">
+                            <strong>Serviço:</strong> {booking.service?.name || "N/A"}
+                          </span>
+                          {booking.service && <p className="text-xs text-green-700 font-semibold">{PriceFormater(booking.service.price)}</p>}
+                        </div>
+
+                        {/* Linha 3: Profissional */}
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm">
+                            <strong>Profissional:</strong> {booking.barber?.name || "N/A"}
+                          </span>
+                        </div>
+
+                        {/* Linha 4: Quando o cliente fez o agendamento */}
                         {booking.createdAt && (
-                          <div className="text-xs text-muted-foreground text-right flex-shrink-0">
-                            Pedido em
-                            <br /> {dateFormatter(booking.createdAt)}
+                          <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                            <Clock className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-blue-600">Agendado pelo cliente em:</span>
+                              <span className="text-sm font-medium">{formatDateTime(booking.createdAt)}</span>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -767,6 +851,39 @@ export function CustomersPage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Remover Plano */}
+      <Dialog open={isRemovePlanModalOpen} onOpenChange={setIsRemovePlanModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remover Plano</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja remover o plano "{selectedSubscriptionToRemove?.planName}" deste cliente?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                <strong>Atenção:</strong> Esta ação irá cancelar a assinatura e o cliente não poderá mais usar os créditos deste plano.
+                Esta ação não pode ser desfeita.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isRemovingPlan}>
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={handleRemovePlan} disabled={isRemovingPlan}>
+              {isRemovingPlan && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Remover Plano
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

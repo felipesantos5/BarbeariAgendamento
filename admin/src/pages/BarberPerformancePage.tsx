@@ -1,7 +1,7 @@
 // src/pages/BarberPerformancePage.tsx
 import { useEffect, useState, useMemo } from "react";
 import { useOutletContext } from "react-router-dom";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { toast } from "sonner";
 
 // Componentes de UI e Ícones
@@ -106,12 +106,34 @@ export function BarberPerformancePage() {
 
   // useEffect para buscar dados quando os filtros mudarem
   useEffect(() => {
-    const yearNum = parseInt(selectedYear, 10);
-    const monthNum = parseInt(selectedMonth, 10) - 1; // Mês é 0-indexado no Date
+    let start: Date | undefined;
+    let end: Date | undefined;
 
-    if (!isNaN(yearNum) && !isNaN(monthNum)) {
-      const start = startOfMonth(new Date(yearNum, monthNum));
-      const end = endOfMonth(new Date(yearNum, monthNum));
+    // "Todos os Anos" selecionado
+    if (selectedYear === "all") {
+      const currentDate = new Date();
+      start = new Date(currentDate.getFullYear() - 10, 0, 1); // Últimos 10 anos
+      end = new Date(currentDate.getFullYear(), 11, 31);
+    }
+    // "Ano Completo" selecionado
+    else if (selectedMonth === "0") {
+      const yearNum = parseInt(selectedYear, 10);
+      if (!isNaN(yearNum)) {
+        start = startOfYear(new Date(yearNum, 0));
+        end = endOfYear(new Date(yearNum, 0));
+      }
+    }
+    // Mês específico selecionado
+    else {
+      const yearNum = parseInt(selectedYear, 10);
+      const monthNum = parseInt(selectedMonth, 10) - 1;
+      if (!isNaN(yearNum) && !isNaN(monthNum)) {
+        start = startOfMonth(new Date(yearNum, monthNum));
+        end = endOfMonth(new Date(yearNum, monthNum));
+      }
+    }
+
+    if (start && end) {
       fetchPerformanceData(start, end);
     }
   }, [barbershopId, selectedMonth, selectedYear]);
@@ -129,6 +151,18 @@ export function BarberPerformancePage() {
 
   // Formata o período selecionado para exibição
   const formatActivePeriodDisplay = (): string => {
+    // "Todos os Anos" selecionado
+    if (selectedYear === "all") {
+      return "Todos os Anos";
+    }
+    // "Ano Completo" selecionado
+    if (selectedMonth === "0") {
+      const yearNum = parseInt(selectedYear, 10);
+      if (!isNaN(yearNum)) {
+        return `Ano Completo de ${yearNum}`;
+      }
+    }
+    // Mês específico selecionado
     const yearNum = parseInt(selectedYear, 10);
     const monthNum = parseInt(selectedMonth, 10) - 1;
     if (!isNaN(yearNum) && !isNaN(monthNum) && monthNum >= 0 && monthNum < 12) {
@@ -156,6 +190,7 @@ export function BarberPerformancePage() {
                     {name}
                   </SelectItem>
                 ))}
+                <SelectItem value="0">Ano Completo</SelectItem>
               </SelectContent>
             </Select>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -168,6 +203,7 @@ export function BarberPerformancePage() {
                     {year}
                   </SelectItem>
                 ))}
+                <SelectItem value="all">Todos os Anos</SelectItem>
               </SelectContent>
             </Select>
           </div>
