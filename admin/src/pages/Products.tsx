@@ -38,7 +38,7 @@ import {
 import { toast } from "sonner";
 import { ImageUploader } from "../components/ImageUploader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -444,17 +444,6 @@ export const ProductManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Produtos</h1>
-          <p className="text-muted-foreground">Gerencie o estoque da sua barbearia</p>
-        </div>
-        <Button onClick={() => openProductModal()}>
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Produto
-        </Button>
-      </div>
-
       {lowStockCount > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
           <div className="flex items-center gap-2">
@@ -467,191 +456,209 @@ export const ProductManagement = () => {
       )}
 
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
+            <div>
+              <CardTitle>Produtos</CardTitle>
+              <CardDescription>
+                Gerencie o estoque da sua barbearia
+              </CardDescription>
+            </div>
+            <Button onClick={() => openProductModal()}>
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Produto
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2 mb-6 ">
-              <TabsTrigger value="produtos" className="gap-2 ">
-                <Package className="w-4 h-4" />
+            <TabsList className="grid w-full max-w-2xl grid-cols-2 mb-8 h-14 p-1.5 bg-muted/50">
+              <TabsTrigger
+                value="produtos"
+                className="gap-2.5 text-base font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
+              >
+                <Package className="w-5 h-5" />
                 Produtos
               </TabsTrigger>
-              <TabsTrigger value="historico" className="gap-2 ">
-                <History className="w-4 h-4" />
+              <TabsTrigger
+                value="historico"
+                className="gap-2.5 text-base font-semibold data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
+              >
+                <History className="w-5 h-5" />
                 Histórico de Estoque
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="produtos" className="mt-0">
               <div className="space-y-4">
-                {/* Header com Título e Filtros */}
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">Produtos Cadastrados</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {products.length} produto{products.length !== 1 ? "s" : ""} encontrado{products.length !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-
-                  {/* Filtros */}
-                  <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar produtos..."
-                        className="pl-10"
-                        value={filters.search}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                      />
-                    </div>
-
-                    <Select value={filters.category} onValueChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}>
-                      <SelectTrigger className="w-full sm:w-48">
-                        <SelectValue placeholder="Todas Categorias" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas Categorias</SelectItem>
-                        <SelectItem value="pomada">Pomada</SelectItem>
-                        <SelectItem value="gel">Gel</SelectItem>
-                        <SelectItem value="shampoo">Shampoo</SelectItem>
-                        <SelectItem value="condicionador">Condicionador</SelectItem>
-                        <SelectItem value="minoxidil">Minoxidil</SelectItem>
-                        <SelectItem value="oleo">Óleo</SelectItem>
-                        <SelectItem value="cera">Cera</SelectItem>
-                        <SelectItem value="spray">Spray</SelectItem>
-                        <SelectItem value="outros">Outros</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
-                      <SelectTrigger className="w-full sm:w-32">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="ativo">Ativo</SelectItem>
-                        <SelectItem value="inativo">Inativo</SelectItem>
-                        <SelectItem value="descontinuado">Descontinuado</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    <Button
-                      variant="outline"
-                      onClick={() => setFilters((prev) => ({ ...prev, lowStock: !prev.lowStock }))}
-                      className={filters.lowStock ? "bg-orange-50 border-orange-300" : ""}
-                    >
-                      <Filter className="w-4 h-4 mr-2" />
-                      Baixo Estoque
-                    </Button>
-                  </div>
+                {/* Header com contagem */}
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {products.length} produto{products.length !== 1 ? "s" : ""} encontrado{products.length !== 1 ? "s" : ""}
+                  </p>
                 </div>
 
-                {/* Tabela */}
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
+                {/* Filtros */}
+                <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar produtos..."
+                      className="pl-10"
+                      value={filters.search}
+                      onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                    />
+                  </div>
+
+                  <Select value={filters.category} onValueChange={(value) => setFilters((prev) => ({ ...prev, category: value }))}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Todas Categorias" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Categorias</SelectItem>
+                      <SelectItem value="pomada">Pomada</SelectItem>
+                      <SelectItem value="gel">Gel</SelectItem>
+                      <SelectItem value="shampoo">Shampoo</SelectItem>
+                      <SelectItem value="condicionador">Condicionador</SelectItem>
+                      <SelectItem value="minoxidil">Minoxidil</SelectItem>
+                      <SelectItem value="oleo">Óleo</SelectItem>
+                      <SelectItem value="cera">Cera</SelectItem>
+                      <SelectItem value="spray">Spray</SelectItem>
+                      <SelectItem value="outros">Outros</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
+                    <SelectTrigger className="w-full sm:w-32">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="ativo">Ativo</SelectItem>
+                      <SelectItem value="inativo">Inativo</SelectItem>
+                      <SelectItem value="descontinuado">Descontinuado</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => setFilters((prev) => ({ ...prev, lowStock: !prev.lowStock }))}
+                    className={filters.lowStock ? "bg-orange-50 border-orange-300" : ""}
+                  >
+                    <Filter className="w-4 h-4 mr-2" />
+                    Baixo Estoque
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tabela */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produto</TableHead>
+                      <TableHead className="pl-12 md:px-2">Estoque</TableHead>
+                      <TableHead>Preços</TableHead>
+                      <TableHead>Comissão</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-12 text-right"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
                       <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="pl-12 md:px-2">Estoque</TableHead>
-                        <TableHead>Preços</TableHead>
-                        <TableHead>Comissão</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-12 text-right"></TableHead>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8">
-                            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                          </TableCell>
-                        </TableRow>
-                      ) : products.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                            Nenhum produto encontrado
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        products.map((product) => (
-                          <TableRow key={product._id}>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                {product.image ? (
-                                  <img src={product.image} alt={product.name} className="h-10 w-10 rounded object-cover" />
-                                ) : (
-                                  <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground">
-                                    <Package className="h-5 w-5" />
-                                  </div>
-                                )}
-                                <div>
-                                  <div className="font-medium">{product.name}</div>
-                                  {product.brand && <div className="text-sm text-muted-foreground">{product.brand}</div>}
+                    ) : products.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          Nenhum produto encontrado
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      products.map((product) => (
+                        <TableRow key={product._id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              {product.image ? (
+                                <img src={product.image} alt={product.name} className="h-10 w-10 rounded object-cover" />
+                              ) : (
+                                <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                                  <Package className="h-5 w-5" />
                                 </div>
+                              )}
+                              <div>
+                                <div className="font-medium">{product.name}</div>
+                                {product.brand && <div className="text-sm text-muted-foreground">{product.brand}</div>}
                               </div>
-                            </TableCell>
-                            <TableCell className="pl-12 md:px-2">
-                              <div className="space-y-1 sm:text-left">
-                                {product.isLowStock ? (
-                                  <Badge variant="destructive" className="gap-1">
-                                    <AlertTriangle className="w-3 h-3" />
-                                    {product.stock.current}
-                                  </Badge>
-                                ) : (
-                                  <Badge variant="secondary">{product.stock.current}</Badge>
-                                )}
-                                <div className="text-xs text-muted-foreground">Mín: {product.stock.minimum}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm text-right sm:text-left">
-                                <div>Venda: {formatCurrency(product.price.sale)}</div>
-                                <div className="text-muted-foreground">Compra: {formatCurrency(product.price.purchase)}</div>
-                                <div className="text-xs text-green-600">Margem: {product.profitMargin ? product.profitMargin.toFixed(1) + "%" : "--"}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>{getCommissionDisplay(product)}</TableCell>
-                            <TableCell className="text-center sm:text-left">
-                              <Badge
-                                variant={product.status === "ativo" ? "default" : product.status === "inativo" ? "secondary" : "outline"}
-                                className={product.status === "ativo" ? "bg-green-100 text-green-800 border-green-200" : ""}
-                              >
-                                {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                                    <MoreHorizontal className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => openProductModal(product)}>
-                                    <Edit className="w-4 h-4 mr-2" />
-                                    Editar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openStockModal(product)}>
-                                    <Package className="w-4 h-4 mr-2" />
-                                    Movimentar Estoque
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedProduct(product);
-                                      setDeleteDialog(true);
-                                    }}
-                                    className="text-red-600 focus:bg-red-50 focus:text-red-700"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Deletar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="pl-12 md:px-2">
+                            <div className="space-y-1 sm:text-left">
+                              {product.isLowStock ? (
+                                <Badge variant="destructive" className="gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  {product.stock.current}
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">{product.stock.current}</Badge>
+                              )}
+                              <div className="text-xs text-muted-foreground">Mín: {product.stock.minimum}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm text-right sm:text-left">
+                              <div>Venda: {formatCurrency(product.price.sale)}</div>
+                              <div className="text-muted-foreground">Compra: {formatCurrency(product.price.purchase)}</div>
+                              <div className="text-xs text-green-600">Margem: {product.profitMargin ? product.profitMargin.toFixed(1) + "%" : "--"}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{getCommissionDisplay(product)}</TableCell>
+                          <TableCell className="text-center sm:text-left">
+                            <Badge
+                              variant={product.status === "ativo" ? "default" : product.status === "inativo" ? "secondary" : "outline"}
+                              className={product.status === "ativo" ? "bg-green-100 text-green-800 border-green-200" : ""}
+                            >
+                              {product.status.charAt(0).toUpperCase() + product.status.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openProductModal(product)}>
+                                  <Edit className="w-4 h-4 mr-2" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openStockModal(product)}>
+                                  <Package className="w-4 h-4 mr-2" />
+                                  Movimentar Estoque
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedProduct(product);
+                                    setDeleteDialog(true);
+                                  }}
+                                  className="text-red-600 focus:bg-red-50 focus:text-red-700"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Deletar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             </TabsContent>
 
@@ -1226,6 +1233,6 @@ export const ProductManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </div >
   );
 };

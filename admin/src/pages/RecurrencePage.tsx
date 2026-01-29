@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Star } from "lucide-react"; // Ícone de Fidelidade
+import { Loader2 } from "lucide-react";
 import { API_BASE_URL } from "@/config/BackendUrl";
 
 // --- Tipagens ---
@@ -127,12 +127,12 @@ export function RecurrencePage() {
 
   return (
     <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Star className="h-5 w-5" />
+      <CardHeader className="gap-0">
+        <CardTitle className="mb-2">
+          {/* <Star className="h-5 w-5" /> */}
           Programa de Fidelidade
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="">
           Configure o programa de fidelidade para recompensar seus clientes. A cada agendamento "Concluído", o cliente ganha um ponto.
         </CardDescription>
         <CardDescription>

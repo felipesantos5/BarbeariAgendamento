@@ -237,42 +237,6 @@ export function OperationalCostsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-3xl font-bold">Custos Operacionais</h1>
-        <div className="flex flex-wrap gap-2">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Mês" />
-            </SelectTrigger>
-            <SelectContent>
-              {monthNames.map((name, index) => (
-                <SelectItem key={index} value={(index + 1).toString()}>
-                  {name}
-                </SelectItem>
-              ))}
-              <SelectItem value="0">Ano Completo</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Ano" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map((year) => (
-                <SelectItem key={year} value={year}>
-                  {year}
-                </SelectItem>
-              ))}
-              <SelectItem value="all">Todos os Anos</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleOpenNewCostDialog}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Adicionar Custo
-          </Button>
-        </div>
-      </div>
-
       {/* Cards de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
@@ -304,29 +268,68 @@ export function OperationalCostsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
             <div>
-              <CardTitle>Custos Cadastrados</CardTitle>
+              <CardTitle>Custos Operacionais</CardTitle>
               <CardDescription>
-                {formatPeriodDisplay()}
-                {selectedType !== "all" && ` - ${getTypeLabel(selectedType)}`}
+                Gerencie os custos da sua barbearia
               </CardDescription>
             </div>
-            <div className="">
-              <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filtrar por tipo" />
+            <div className="flex flex-wrap gap-2">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Mês" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  {costTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
+                  {monthNames.map((name, index) => (
+                    <SelectItem key={index} value={(index + 1).toString()}>
+                      {name}
                     </SelectItem>
                   ))}
+                  <SelectItem value="0">Ano Completo</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="all">Todos os Anos</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleOpenNewCostDialog}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Adicionar Custo
+              </Button>
             </div>
+          </div>
+
+          {/* Filtro de Tipo */}
+          <div className="mt-4 flex justify-between items-center">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {formatPeriodDisplay()}
+                {selectedType !== "all" && ` - ${getTypeLabel(selectedType)}`}
+              </p>
+            </div>
+            <Select value={selectedType} onValueChange={setSelectedType}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filtrar por tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os tipos</SelectItem>
+                {costTypes.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
