@@ -298,7 +298,7 @@ export function PlansPage() {
               </div>
               {/* NOVO CAMPO DE CRÉDITOS */}
               <div className="space-y-2">
-                <Label htmlFor="planCredits">Créditos</Label>
+                <Label htmlFor="planCredits">Créditos (usos no mês)</Label>
                 <Input
                   id="planCredits"
                   type="number"

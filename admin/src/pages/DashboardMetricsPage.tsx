@@ -414,7 +414,7 @@ export default function DashboardMetricsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
                 <MetricCard
                   title="Faturamento Bruto"
                   value={PriceFormater(data.financialOverview.totalGrossRevenue)}

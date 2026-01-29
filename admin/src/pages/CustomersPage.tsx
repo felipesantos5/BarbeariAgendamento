@@ -393,7 +393,7 @@ export function CustomersPage() {
       { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className?: string }
     > = {
       booked: { label: "Agendado", variant: "default" },
-      completed: { label: "Concluído", variant: "secondary" },
+      completed: { label: "Concluído", variant: "secondary", className: "bg-green-600 text-white" },
       canceled: { label: "Cancelado", variant: "destructive" },
       payment_expired: { label: "Pagamento Expirado", variant: "destructive", className: "bg-orange-600" },
       pending_payment: { label: "Aguardando Pagamento", variant: "secondary", className: "bg-amber-500 text-white" },
@@ -831,26 +831,25 @@ export function CustomersPage() {
                       <div className="space-y-3">
                         {/* Linha 1: Horário do Corte (quando vai acontecer) */}
                         <div className="bg-primary/5 p-3 rounded-md border border-primary/20">
-                          <div className="flex items-center gap-2 justify-between">
-                            <div className="flex flex-col gap-1">
-                              <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
-                              <span className="text-xs font-semibold text-primary uppercase">Horário do Corte</span>
+                          <div className="flex gap-2 justify-between">
+                            <div className="flex flex-col gap-1 justify-between">
+                              <div className="flex gap-1">
+                                <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
+                                <span className="text-xs font-semibold text-primary uppercase">Horário do Corte</span>
+                              </div>
+                              <span className="text-lg font-bold">{formatDateTime(booking.time)}</span>
                             </div>
                             <div className="flex flex-col items-end">
                               {getStatusBadge(booking.status)}
                               {/* Linha 4: Quando o cliente fez o agendamento */}
                               {booking.createdAt && (
-                                <div className="flex items-center gap-2 pt-2">
-                                  <Clock className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-semibold text-blue-600">Agendado pelo cliente em:</span>
-                                    <span className="text-sm font-medium">{formatDateTime(booking.createdAt)}</span>
-                                  </div>
+                                <div className="flex flex-col mt-2">
+                                  <span className="text-xs font-semibold text-blue-600">Agendado pelo cliente em:</span>
+                                  <span className="text-sm font-medium text-right">{formatDateTime(booking.createdAt)}</span>
                                 </div>
                               )}
                             </div>
                           </div>
-                          <span className="text-lg font-bold">{formatDateTime(booking.time)}</span>
                         </div>
 
                         {/* Linha 2: Serviço */}
