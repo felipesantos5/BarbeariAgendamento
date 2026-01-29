@@ -14,6 +14,7 @@ import { API_BASE_URL } from "@/config/BackendUrl";
 
 interface CheckoutSettings {
   mercadoPagoAccessToken?: string;
+  mercadoPagoWebhookSecret?: string;
   paymentsEnabled?: boolean;
   requireOnlinePayment?: boolean;
 }
@@ -23,16 +24,19 @@ export const CheckoutConfigPage = () => {
 
   const [formData, setFormData] = useState<CheckoutSettings>({
     mercadoPagoAccessToken: "",
+    mercadoPagoWebhookSecret: "",
     paymentsEnabled: false,
     requireOnlinePayment: false,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showToken, setShowToken] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [isSettingUpWebhook, setIsSettingUpWebhook] = useState(false);
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
   const [webhookInstructions, setWebhookInstructions] = useState<any>(null);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Busca as configurações de checkout
   const fetchCheckoutSettings = async () => {
@@ -40,6 +44,7 @@ export const CheckoutConfigPage = () => {
       const response = await apiClient.get(`${API_BASE_URL}/barbershops/${barbershopId}`);
       setFormData({
         mercadoPagoAccessToken: response.data.mercadoPagoAccessToken || "",
+        mercadoPagoWebhookSecret: response.data.mercadoPagoWebhookSecret || "",
         paymentsEnabled: response.data.paymentsEnabled || false,
         requireOnlinePayment: response.data.requireOnlinePayment || false,
       });
@@ -89,11 +94,16 @@ export const CheckoutConfigPage = () => {
     try {
       await apiClient.put(`${API_BASE_URL}/barbershops/${barbershopId}`, {
         mercadoPagoAccessToken: formData.mercadoPagoAccessToken,
+        mercadoPagoWebhookSecret: formData.mercadoPagoWebhookSecret,
         paymentsEnabled: formData.paymentsEnabled,
         requireOnlinePayment: formData.requireOnlinePayment,
       });
 
       toast.success("Configurações de checkout salvas com sucesso!");
+
+      // Mostrar mensagem de sucesso
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 5000);
     } catch (error: any) {
       console.error("Erro ao salvar configurações:", error);
       toast.error(error.response?.data?.error || "Erro ao salvar configurações");
@@ -245,6 +255,36 @@ export const CheckoutConfigPage = () => {
                   </a>
                 </div>
               </div>
+
+              {/* Campo para a Webhook Secret */}
+              <div className="space-y-2 flex flex-col pt-4">
+                <Label htmlFor="mercadoPagoWebhookSecret">Assinatura Secreta do Webhook (Opcional)</Label>
+                <div className="relative">
+                  <Input
+                    id="mercadoPagoWebhookSecret"
+                    name="mercadoPagoWebhookSecret"
+                    type={showWebhookSecret ? "text" : "password"}
+                    value={formData.mercadoPagoWebhookSecret || ""}
+                    onChange={handleInputChange}
+                    placeholder="Cole a assinatura secreta gerada pelo Mercado Pago"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute inset-y-0 right-0 h-full px-3"
+                    onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                    aria-label={showWebhookSecret ? "Esconder secret" : "Mostrar secret"}
+                  >
+                    {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A assinatura secreta é gerada automaticamente quando você configura o webhook no painel do Mercado Pago.
+                  Cole ela aqui para validar a autenticidade das notificações e aumentar a segurança.
+                </p>
+              </div>
             </div>
           )}
 
@@ -304,8 +344,14 @@ export const CheckoutConfigPage = () => {
           )}
         </CardContent>
 
-        <CardFooter className="justify-end mt-4">
-          <Button type="submit" disabled={isSaving} className="cursor-pointer">
+        <CardFooter className="flex-col sm:flex-row items-center justify-end gap-3 mt-4">
+          {/* Mensagem de sucesso - ao lado do botão no desktop, embaixo no mobile */}
+          <div className={`flex items-center gap-2 transition-opacity duration-300 ${showSuccessMessage ? 'opacity-100' : 'opacity-0'} order-2 sm:order-1`}>
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <span className="text-sm font-medium text-green-600">Configurações salvas com sucesso!</span>
+          </div>
+
+          <Button type="submit" disabled={isSaving} className="cursor-pointer order-1 sm:order-2">
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -403,6 +449,14 @@ export const CheckoutConfigPage = () => {
                   <li className="flex gap-2">
                     <span className="font-bold min-w-[1.5rem]">6.</span>
                     <span>{webhookInstructions.instructions.step6}</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="font-bold min-w-[1.5rem]">7.</span>
+                    <span>
+                      Após salvar, o Mercado Pago irá gerar uma <strong className="text-blue-600">Assinatura Secreta</strong>.
+                      Copie essa assinatura e cole no campo "Assinatura Secreta do Webhook" acima nesta página.
+                      Isso aumenta a segurança validando que os webhooks realmente vieram do Mercado Pago.
+                    </span>
                   </li>
                 </ol>
               </div>

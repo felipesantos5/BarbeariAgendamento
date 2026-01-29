@@ -829,16 +829,26 @@ export function CustomersPage() {
                   {customerBookings.map((booking) => (
                     <Card key={booking._id} className="p-4 bg-secondary/30">
                       <div className="space-y-3">
-                        {/* Header: Status Badge */}
-                        <div className="flex justify-end">
-                          {getStatusBadge(booking.status)}
-                        </div>
-
                         {/* Linha 1: Horário do Corte (quando vai acontecer) */}
                         <div className="bg-primary/5 p-3 rounded-md border border-primary/20">
-                          <div className="flex items-center gap-2 mb-1">
-                            <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
-                            <span className="text-xs font-semibold text-primary uppercase">Horário do Corte</span>
+                          <div className="flex items-center gap-2 justify-between">
+                            <div className="flex flex-col gap-1">
+                              <CalendarDays className="h-5 w-5 text-primary flex-shrink-0" />
+                              <span className="text-xs font-semibold text-primary uppercase">Horário do Corte</span>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              {getStatusBadge(booking.status)}
+                              {/* Linha 4: Quando o cliente fez o agendamento */}
+                              {booking.createdAt && (
+                                <div className="flex items-center gap-2 pt-2">
+                                  <Clock className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-blue-600">Agendado pelo cliente em:</span>
+                                    <span className="text-sm font-medium">{formatDateTime(booking.createdAt)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           <span className="text-lg font-bold">{formatDateTime(booking.time)}</span>
                         </div>
@@ -859,17 +869,6 @@ export function CustomersPage() {
                             <strong>Profissional:</strong> {booking.barber?.name || "N/A"}
                           </span>
                         </div>
-
-                        {/* Linha 4: Quando o cliente fez o agendamento */}
-                        {booking.createdAt && (
-                          <div className="flex items-center gap-2 pt-2 border-t border-border/50">
-                            <Clock className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                            <div className="flex flex-col">
-                              <span className="text-xs font-semibold text-blue-600">Agendado pelo cliente em:</span>
-                              <span className="text-sm font-medium">{formatDateTime(booking.createdAt)}</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </Card>
                   ))}

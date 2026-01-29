@@ -545,156 +545,156 @@ export function MyBookingsPage() {
                     {subscriptions
                       .filter((s) => s.status === "active")
                       .map((subscription) => {
-                  const statusInfo = getSubscriptionStatusInfo(subscription.status, subscription.autoRenew);
-                  const isActive = subscription.status === "active";
-                  const canCancel = isActive && subscription.autoRenew;
-                  const creditsPercentage = (subscription.creditsRemaining / subscription.plan.totalCredits) * 100;
+                        const statusInfo = getSubscriptionStatusInfo(subscription.status, subscription.autoRenew);
+                        const isActive = subscription.status === "active";
+                        const canCancel = isActive && subscription.autoRenew;
+                        const creditsPercentage = (subscription.creditsRemaining / subscription.plan.totalCredits) * 100;
 
-                  return (
-                    <Card key={subscription._id} className="bg-white dark:bg-gray-800 shadow-sm border overflow-hidden">
-                      {/* Header do plano */}
-                      <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            {subscription.barbershop.logoUrl && (
-                              <img
-                                src={subscription.barbershop.logoUrl}
-                                alt=""
-                                className="w-12 h-12 object-contain rounded-lg bg-white border"
-                              />
-                            )}
-                            <div>
-                              <h3 className="font-semibold text-gray-900 dark:text-white">
-                                {subscription.plan.name}
-                              </h3>
-                              <p className="text-sm text-gray-500">{subscription.barbershop.name}</p>
+                        return (
+                          <Card key={subscription._id} className="bg-white dark:bg-gray-800 shadow-sm border overflow-hidden">
+                            {/* Header do plano */}
+                            <div className="p-4 border-b bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-700">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  {subscription.barbershop.logoUrl && (
+                                    <img
+                                      src={subscription.barbershop.logoUrl}
+                                      alt=""
+                                      className="w-12 h-12 object-contain rounded-lg bg-white border"
+                                    />
+                                  )}
+                                  <div>
+                                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                                      {subscription.plan.name}
+                                    </h3>
+                                    <p className="text-sm text-gray-500">{subscription.barbershop.name}</p>
+                                  </div>
+                                </div>
+                                <Badge className={`${statusInfo.className} border text-xs`}>{statusInfo.text}</Badge>
+                              </div>
                             </div>
-                          </div>
-                          <Badge className={`${statusInfo.className} border text-xs`}>{statusInfo.text}</Badge>
-                        </div>
-                      </div>
 
-                      {/* Conteúdo do plano */}
-                      <div className="p-4 space-y-4">
-                        {/* Barra de créditos */}
-                        <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Créditos disponíveis</span>
-                            <span className="text-lg font-bold text-gray-900 dark:text-white">
-                              {subscription.creditsRemaining}
-                              <span className="text-sm font-normal text-gray-500">
-                                {" "}
-                                / {subscription.plan.totalCredits}
-                              </span>
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                            <div
-                              className={`h-2.5 rounded-full transition-all ${creditsPercentage > 50
-                                ? "bg-green-500"
-                                : creditsPercentage > 20
-                                  ? "bg-yellow-500"
-                                  : "bg-red-500"
-                                }`}
-                              style={{ width: `${creditsPercentage}%` }}
-                            />
-                          </div>
-                        </div>
+                            {/* Conteúdo do plano */}
+                            <div className="p-4 space-y-4">
+                              {/* Barra de créditos */}
+                              <div>
+                                <div className="flex justify-between items-center mb-2">
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">Créditos disponíveis</span>
+                                  <span className="text-lg font-bold text-gray-900 dark:text-white">
+                                    {subscription.creditsRemaining}
+                                    <span className="text-sm font-normal text-gray-500">
+                                      {" "}
+                                      / {subscription.plan.totalCredits}
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                  <div
+                                    className={`h-2.5 rounded-full transition-all ${creditsPercentage > 50
+                                      ? "bg-green-500"
+                                      : creditsPercentage > 20
+                                        ? "bg-yellow-500"
+                                        : "bg-red-500"
+                                      }`}
+                                    style={{ width: `${creditsPercentage}%` }}
+                                  />
+                                </div>
+                              </div>
 
-                        {/* Info grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                            <p className="text-xs text-gray-500 mb-1">Válido até</p>
-                            <p className="font-semibold text-gray-900 dark:text-white">
-                              {format(new Date(subscription.endDate), "dd/MM/yyyy", { locale: ptBR })}
-                            </p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                            <p className="text-xs text-gray-500 mb-1">Valor mensal</p>
-                            <p className="font-semibold text-gray-900 dark:text-white">
-                              R$ {subscription.plan.price.toFixed(2).replace(".", ",")}
-                            </p>
-                          </div>
-                        </div>
-
-                        {subscription.plan.description && (
-                          <p className="text-sm text-gray-500 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                            {subscription.plan.description}
-                          </p>
-                        )}
-
-                        {/* Renovação automática info */}
-                        {isActive && (
-                          <div
-                            className={`flex items-center gap-2 text-sm p-3 rounded-lg ${subscription.autoRenew
-                              ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                              : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-                              }`}
-                          >
-                            {subscription.autoRenew ? (
-                              <>
-                                <Repeat className="h-4 w-4" />
-                                <span>Renovação automática ativa</span>
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="h-4 w-4" />
-                                <span>Não será renovado automaticamente</span>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Ação de cancelar */}
-                      {canCancel && (
-                        <div className="px-4 pb-4">
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                                disabled={isCancelingSubscription === subscription._id}
-                              >
-                                {isCancelingSubscription === subscription._id ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                )}
-                                Cancelar Renovação Automática
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Cancelar renovação?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Você continuará com acesso aos seus{" "}
-                                  <strong>{subscription.creditsRemaining} créditos</strong> até{" "}
-                                  <strong>
+                              {/* Info grid */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                  <p className="text-xs text-gray-500 mb-1">Válido até</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">
                                     {format(new Date(subscription.endDate), "dd/MM/yyyy", { locale: ptBR })}
-                                  </strong>
-                                  .
-                                  <br />
-                                  <br />
-                                  Após essa data, sua assinatura será encerrada e não haverá cobranças futuras.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Manter</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleCancelSubscription(subscription)}
-                                  className="bg-red-600 hover:bg-red-700 text-white"
+                                  </p>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                  <p className="text-xs text-gray-500 mb-1">Valor mensal</p>
+                                  <p className="font-semibold text-gray-900 dark:text-white">
+                                    R$ {subscription.plan.price.toFixed(2).replace(".", ",")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {subscription.plan.description && (
+                                <p className="text-sm text-gray-500 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                                  {subscription.plan.description}
+                                </p>
+                              )}
+
+                              {/* Renovação automática info */}
+                              {isActive && (
+                                <div
+                                  className={`flex items-center gap-2 text-sm p-3 rounded-lg ${subscription.autoRenew
+                                    ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                                    : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                                    }`}
                                 >
-                                  Sim, cancelar renovação
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      )}
-                        </Card>
-                      );
-                    })}
+                                  {subscription.autoRenew ? (
+                                    <>
+                                      <Repeat className="h-4 w-4" />
+                                      <span>Renovação automática ativa</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <XCircle className="h-4 w-4" />
+                                      <span>Não será renovado automaticamente</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Ação de cancelar */}
+                            {canCancel && (
+                              <div className="px-4 pb-4">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                                      disabled={isCancelingSubscription === subscription._id}
+                                    >
+                                      {isCancelingSubscription === subscription._id ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <XCircle className="mr-2 h-4 w-4" />
+                                      )}
+                                      Cancelar Renovação Automática
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Cancelar renovação?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Você continuará com acesso aos seus{" "}
+                                        <strong>{subscription.creditsRemaining} créditos</strong> até{" "}
+                                        <strong>
+                                          {format(new Date(subscription.endDate), "dd/MM/yyyy", { locale: ptBR })}
+                                        </strong>
+                                        .
+                                        <br />
+                                        <br />
+                                        Após essa data, sua assinatura será encerrada e não haverá cobranças futuras.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Manter</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleCancelSubscription(subscription)}
+                                        className="bg-red-600 hover:bg-red-700 text-white"
+                                      >
+                                        Sim, cancelar renovação
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            )}
+                          </Card>
+                        );
+                      })}
                   </div>
                 )}
 
@@ -716,7 +716,7 @@ export function MyBookingsPage() {
                               key={subscription._id}
                               className="bg-gray-50/50 dark:bg-gray-800/50 shadow-none border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                             >
-                              <div className="p-3">
+                              <div className="px-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-3 flex-1 min-w-0">
                                     {subscription.barbershop.logoUrl && (

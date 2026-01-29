@@ -42,6 +42,7 @@ const BarbershopSchema = new mongoose.Schema(
       default: "#000000",
     },
     mercadoPagoAccessToken: { type: String, trim: true },
+    mercadoPagoWebhookSecret: { type: String, trim: true },
     paymentsEnabled: { type: Boolean, default: false },
     requireOnlinePayment: {
       type: Boolean,

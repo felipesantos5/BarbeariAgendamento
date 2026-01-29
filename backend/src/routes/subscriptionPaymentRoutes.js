@@ -1,5 +1,6 @@
 import express from "express";
 import { MercadoPagoConfig, PreApproval } from "mercadopago";
+import crypto from "crypto";
 import Subscription from "../models/Subscription.js";
 import Plan from "../models/Plan.js";
 import Barbershop from "../models/Barbershop.js";
@@ -8,6 +9,67 @@ import { protectCustomer } from "../middleware/authCustomerMiddleware.js";
 import { protectAdmin } from "../middleware/authAdminMiddleware.js";
 
 const router = express.Router({ mergeParams: true });
+
+// Função para validar assinatura do webhook do Mercado Pago
+function validateWebhookSignature(req, secret) {
+  try {
+    const xSignature = req.headers["x-signature"];
+    const xRequestId = req.headers["x-request-id"];
+
+    if (!xSignature || !xRequestId) {
+      console.log("⚠️ Headers x-signature ou x-request-id ausentes");
+      return false;
+    }
+
+    // Extrair dataId da query ou do body
+    const dataId = req.query["data.id"] || req.body?.data?.id;
+
+    if (!dataId) {
+      console.log("⚠️ data.id não encontrado na requisição");
+      return false;
+    }
+
+    // Extrair ts e hash do header x-signature
+    // Formato: "ts=1704908010,v1=618c85345248dd820d5fd456117c2ab2ef8eda45a0282ff693eac24131a5e839"
+    const parts = xSignature.split(",");
+    let ts = null;
+    let hash = null;
+
+    parts.forEach((part) => {
+      const [key, value] = part.split("=");
+      if (key.trim() === "ts") ts = value;
+      if (key.trim() === "v1") hash = value;
+    });
+
+    if (!ts || !hash) {
+      console.log("⚠️ Não foi possível extrair ts ou hash do x-signature");
+      return false;
+    }
+
+    // Montar o manifest conforme documentação do MP
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+    // Gerar assinatura usando HMAC SHA256
+    const cyphedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(manifest)
+      .digest("hex");
+
+    // Comparar assinaturas
+    if (cyphedSignature === hash) {
+      console.log("✅ Assinatura webhook validada com sucesso");
+      return true;
+    } else {
+      console.log("❌ Assinatura webhook inválida");
+      console.log("Expected:", cyphedSignature);
+      console.log("Received:", hash);
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Erro ao validar assinatura do webhook:", error);
+    return false;
+  }
+}
 
 // POST /api/barbershops/:barbershopId/subscriptions/create-preapproval
 // Cria uma assinatura recorrente no Mercado Pago
@@ -141,11 +203,32 @@ router.post("/webhook", async (req, res) => {
 
   const logPrefix = `[WEBHOOK-SUB ${notification.type}]`;
   console.log(`${logPrefix} ID: ${notification.data?.id}`);
+  console.log(`${logPrefix} Headers:`, {
+    "x-signature": req.headers["x-signature"] ? "presente" : "ausente",
+    "x-request-id": req.headers["x-request-id"] ? "presente" : "ausente",
+  });
 
   // Responder 200 imediatamente para o MP não reenviar
   res.sendStatus(200);
 
   try {
+    // Buscar barbershop para validar assinatura
+    if (barbershopId) {
+      const barbershop = await Barbershop.findById(barbershopId);
+
+      // Se tem webhook secret configurado, validar assinatura
+      if (barbershop?.mercadoPagoWebhookSecret) {
+        const isValid = validateWebhookSignature(req, barbershop.mercadoPagoWebhookSecret);
+
+        if (!isValid) {
+          console.log(`${logPrefix} ❌ Assinatura inválida - webhook rejeitado`);
+          return; // Não processar webhook com assinatura inválida
+        }
+      } else {
+        console.log(`${logPrefix} ⚠️ Webhook secret não configurado - processando sem validação`);
+      }
+    }
+
     // Tipos de notificação do MP para subscriptions:
     // - subscription_preapproval (criação/atualização)
     // - subscription_authorized_payment (pagamento autorizado)
