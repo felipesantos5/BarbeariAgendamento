@@ -1,0 +1,30 @@
+# robots.txt para Barbearia Agendamento
+
+# Permitir acesso de todos os crawlers
+User-agent: *
+Allow: /
+
+# Páginas específicas que não devem ser indexadas
+Disallow: /entrar
+Disallow: /meus-agendamentos
+Disallow: /*/pagamento-sucesso
+Disallow: /*/agendamento-sucesso
+Disallow: /*/assinatura-sucesso
+
+# Sitemap (ajuste a URL quando tiver sitemap)
+# Sitemap: https://barbeariagendamento.com.br/sitemap.xml
+
+# Crawl-delay para ser gentil com o servidor
+Crawl-delay: 1
+
+# Google específico
+User-agent: Googlebot
+Allow: /
+Disallow: /entrar
+Disallow: /meus-agendamentos
+
+# Bing específico
+User-agent: Bingbot
+Allow: /
+Disallow: /entrar
+Disallow: /meus-agendamentos

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCustomerAuth } from "@/contexts/CustomerAuthContext";
 import apiClient from "@/services/api";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,9 @@ export function MyBookingsPage() {
   const [bookingToReschedule, setBookingToReschedule] = useState<PopulatedBooking | null>(null);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("agendamentos");
+
+  // Atualizar título da página
+  useDocumentTitle("Meus Agendamentos - Barbearia Agendamento");
 
   // Função para buscar os agendamentos
   const fetchBookings = async () => {

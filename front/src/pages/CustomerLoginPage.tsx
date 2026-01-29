@@ -2,9 +2,13 @@ import { LoginForm } from "@/components/loginForm";
 import barberBackground from "@/assets/barber.jpg";
 import logo from "@/assets/logo-png.png";
 import { useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export function CustomerLoginPage() {
   const navigate = useNavigate();
+
+  useDocumentTitle("Entrar - Barbearia Agendamento");
+
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">

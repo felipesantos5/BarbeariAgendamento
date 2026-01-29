@@ -15,6 +15,7 @@ import { Plan } from "@/types/plans";
 import { CustomerProductsPage } from "./sections/Products";
 import { ProductsApiResponse } from "@/types/Products";
 import { Service } from "@/types/Service";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export type Tab = {
   id: string;
@@ -38,6 +39,13 @@ export function Loja() {
   const [isLoading, setIsLoading] = useState(true);
 
   const bookingSectionRef = useRef<HTMLDivElement>(null);
+
+  // Atualizar título da página dinamicamente
+  useDocumentTitle(
+    barbershop
+      ? `${barbershop.name} - Agendamento Online`
+      : "Barbearia Agendamento - Sistema de Agendamento Online"
+  );
 
   useEffect(() => {
     if (!slug) {
