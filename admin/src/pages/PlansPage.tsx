@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Edit, Trash2, Loader2 } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Loader2, HelpCircle } from "lucide-react";
 import { PriceFormater } from "@/helper/priceFormater";
 
 // Tipagem para um Plano
@@ -63,6 +63,7 @@ export function PlansPage() {
   // Estados para o modal de edição/criação
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<Partial<Plan>>(initialPlanState);
+  const [isHelpDialogOpen, setIsHelpDialogOpen] = useState(false);
 
   // Função para buscar os planos da API
   const fetchPlans = async () => {
@@ -149,7 +150,12 @@ export function PlansPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row justify-between items-center">
-          <CardTitle>Gerenciar Planos</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Gerenciar Planos</CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setIsHelpDialogOpen(true)} title="Como funciona">
+              <HelpCircle className="h-5 w-5 text-muted-foreground" />
+            </Button>
+          </div>
           {/* <CardDescription>Visualize, edite ou remova os planos oferecidos pela sua barbearia.</CardDescription> */}
           <Button onClick={handleOpenNewPlanDialog} className="max-w-xs">
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -368,6 +374,85 @@ export function PlansPage() {
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Salvar Plano
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Ajuda - Como Funciona */}
+      <Dialog open={isHelpDialogOpen} onOpenChange={setIsHelpDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Como Funcionam os Planos?</DialogTitle>
+            <DialogDescription>Entenda o fluxo completo de uso dos planos na sua barbearia</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Passo 1 */}
+            <div className="flex gap-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+                1
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="font-semibold text-base">Criar um Plano</h4>
+                <p className="text-sm text-muted-foreground">
+                  Defina o nome, preço, quantidade de créditos e duração do plano. Exemplo: "Plano Mensal" com 4 créditos válidos por 30 dias.
+                </p>
+              </div>
+            </div>
+
+            {/* Passo 2 */}
+            <div className="flex gap-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+                2
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="font-semibold text-base">Vincular Serviço ao Plano</h4>
+                <p className="text-sm text-muted-foreground">
+                  Na página de Serviços, crie ou edite um serviço e marque-o como "Serviço de Plano", vinculando-o ao plano desejado. Este serviço só poderá ser agendado por clientes com plano ativo.
+                </p>
+              </div>
+            </div>
+
+            {/* Passo 3 */}
+            <div className="flex gap-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+                3
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="font-semibold text-base">Atribuir Plano ao Cliente</h4>
+                <p className="text-sm text-muted-foreground">
+                  Na página de Clientes, atribua o plano ao cliente desejado. O cliente é identificado pelo número de telefone cadastrado.
+                </p>
+              </div>
+            </div>
+
+            {/* Passo 4 */}
+            <div className="flex gap-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg">
+                4
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="font-semibold text-base">Cliente Agenda Automaticamente</h4>
+                <p className="text-sm text-muted-foreground">
+                  Quando o cliente agendar usando o <strong>mesmo número de telefone</strong> cadastrado no plano, o sistema reconhecerá automaticamente e consumirá 1 crédito, sem necessidade de pagamento.
+                </p>
+              </div>
+            </div>
+
+            {/* Informação Importante */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+              <div className="flex gap-3">
+                <HelpCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h5 className="font-semibold text-sm text-blue-900">Importante!</h5>
+                  <p className="text-sm text-blue-800">
+                    O cliente <strong>não precisa estar logado</strong>. O sistema identifica automaticamente pelo telefone informado no agendamento. Certifique-se de que o cliente use o mesmo número cadastrado no plano.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsHelpDialogOpen(false)}>Entendi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

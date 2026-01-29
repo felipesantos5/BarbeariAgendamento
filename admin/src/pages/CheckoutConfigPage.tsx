@@ -396,7 +396,9 @@ export const CheckoutConfigPage = () => {
                   </li>
                   <li className="flex gap-2">
                     <span className="font-bold min-w-[1.5rem]">5.</span>
-                    <span>{webhookInstructions.instructions.step5}</span>
+                    <span>
+                      Selecione os eventos: <strong>Pagamentos</strong>, <strong>Planos e Assinaturas</strong>
+                    </span>
                   </li>
                   <li className="flex gap-2">
                     <span className="font-bold min-w-[1.5rem]">6.</span>

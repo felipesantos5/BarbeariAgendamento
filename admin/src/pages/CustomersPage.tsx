@@ -148,6 +148,13 @@ export function CustomersPage() {
   const [selectedSubscriptionToRemove, setSelectedSubscriptionToRemove] = useState<{ subscriptionId: string; customerId: string; planName: string } | null>(null);
   const [isRemovingPlan, setIsRemovingPlan] = useState(false);
 
+  // Estados para Histórico de Planos
+  const [isPlanHistoryModalOpen, setIsPlanHistoryModalOpen] = useState(false);
+  const [planHistory, setPlanHistory] = useState<any[]>([]);
+  const [isLoadingPlanHistory, setIsLoadingPlanHistory] = useState(false);
+  const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<Customer | null>(null);
+  const [planHistoryFilter, setPlanHistoryFilter] = useState<"active" | "all">("active");
+
   // --- Funções de Fetch ---
   const fetchPageData = useCallback(
     async (page = 1) => {
@@ -271,6 +278,27 @@ export function CustomersPage() {
       toast.error(error.response?.data?.error || "Erro ao remover plano.");
     } finally {
       setIsRemovingPlan(false);
+    }
+  };
+
+  // Função para abrir modal de histórico de planos
+  const handleOpenPlanHistoryModal = async (customer: Customer) => {
+    setSelectedCustomerForHistory(customer);
+    setPlanHistoryFilter("active"); // Reset para "Ativos" como padrão
+    setIsPlanHistoryModalOpen(true);
+    setIsLoadingPlanHistory(true);
+
+    try {
+      const response = await apiClient.get(
+        `${API_BASE_URL}/api/barbershops/${barbershopId}/admin/customers/${customer._id}/plan-history`
+      );
+      setPlanHistory(response.data.subscriptions);
+    } catch (error: any) {
+      console.error("Erro ao buscar histórico de planos:", error);
+      toast.error("Erro ao carregar histórico de planos.");
+      setPlanHistory([]);
+    } finally {
+      setIsLoadingPlanHistory(false);
     }
   };
 
@@ -643,6 +671,10 @@ export function CustomersPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleOpenPlanHistoryModal(customer)}>
+                                <History className="h-4 w-4 mr-2" />
+                                Histórico de Planos
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleOpenSubscribeModal(customer)}>
                                 <Plus className="h-4 w-4 mr-2" />
                                 {activeSubscriptions.length > 0 ? "Adicionar Novo Plano" : "Atribuir Plano"}
@@ -1000,6 +1032,193 @@ export function CustomersPage() {
             <Button onClick={handleSubscribeCustomer} disabled={isSubscribing || !selectedPlanId || !selectedBarberId}>
               {isSubscribing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Histórico de Planos */}
+      <Dialog open={isPlanHistoryModalOpen} onOpenChange={setIsPlanHistoryModalOpen}>
+        <DialogContent className="max-w-5xl max-h-[80vh] w-full">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div className="">
+              <DialogTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Histórico de Planos - {selectedCustomerForHistory?.name}
+              </DialogTitle>
+              <DialogDescription>
+                Visualize todos os planos associados a este cliente.
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="plan-filter" className="text-sm font-medium">
+                Mostrar:
+              </Label>
+              <Select value={planHistoryFilter} onValueChange={(value: "active" | "all") => setPlanHistoryFilter(value)}>
+                <SelectTrigger id="plan-filter" className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Apenas Ativos</SelectItem>
+                  <SelectItem value="all">Todos os Planos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] pr-4">
+            {isLoadingPlanHistory ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : planHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <CreditCard className="h-12 w-12 mb-2" />
+                <p>Nenhum plano encontrado para este cliente.</p>
+              </div>
+            ) : (
+              (() => {
+                const filteredPlans = planHistory.filter((subscription) => planHistoryFilter === "all" || subscription.status === "active");
+
+                if (filteredPlans.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                      <Filter className="h-12 w-12 mb-2" />
+                      <p>Nenhum plano ativo encontrado.</p>
+                      <p className="text-xs mt-1">Selecione "Todos os Planos" para ver o histórico completo.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {filteredPlans.map((subscription) => {
+                      const isActive = subscription.status === "active";
+                      const isExpired = subscription.status === "expired";
+                      const isCanceled = subscription.status === "canceled";
+                      const isPending = subscription.status === "pending";
+
+                      // Definir cor do badge baseado no status
+                      const statusColor = isActive
+                        ? "bg-green-100 text-green-800 border-green-300"
+                        : isExpired
+                          ? "bg-orange-100 text-orange-800 border-orange-300"
+                          : isCanceled
+                            ? "bg-red-100 text-red-800 border-red-300"
+                            : isPending
+                              ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                              : "bg-gray-100 text-gray-800 border-gray-300";
+
+                      // Traduzir status
+                      const statusText = isActive
+                        ? "Ativo"
+                        : isExpired
+                          ? "Expirado"
+                          : isCanceled
+                            ? "Cancelado"
+                            : isPending
+                              ? "Pendente"
+                              : subscription.status;
+
+                      return (
+                        <Card key={subscription._id} className={`${isActive ? "border-green-500" : ""}`}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg">{subscription.plan?.name || "Plano Desconhecido"}</CardTitle>
+                              <Badge className={statusColor}>{statusText}</Badge>
+                            </div>
+                            <CardDescription className="flex items-center gap-4 text-xs">
+                              <span className="flex items-center gap-1">
+                                <CalendarDays className="h-3 w-3" />
+                                {format(new Date(subscription.startDate), "dd/MM/yyyy", { locale: ptBR })} até{" "}
+                                {format(new Date(subscription.endDate), "dd/MM/yyyy", { locale: ptBR })}
+                              </span>
+                              {subscription.barber?.name && (
+                                <span className="flex items-center gap-1">
+                                  <User className="h-3 w-3" />
+                                  Vendido por: {subscription.barber.name}
+                                </span>
+                              )}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 gap-4 mb-4">
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">Créditos Totais</p>
+                                <p className="text-2xl font-bold">{subscription.totalCredits}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">Créditos Usados</p>
+                                <p className="text-2xl font-bold text-primary">{subscription.creditsUsed}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">Créditos Restantes</p>
+                                <p className="text-2xl font-bold">{subscription.creditsRemaining}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-sm text-muted-foreground">Agendamentos</p>
+                                <p className="text-2xl font-bold text-blue-600">{subscription.bookingsCount}</p>
+                              </div>
+                            </div>
+
+                            {subscription.bookings && subscription.bookings.length > 0 && (
+                              <div className="border-t pt-3">
+                                <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                  <Calendar className="h-4 w-4" />
+                                  Agendamentos Realizados
+                                </p>
+                                <div className="space-y-2">
+                                  {subscription.bookings.map((booking: any) => {
+                                    const bookingStatusColor =
+                                      booking.status === "completed"
+                                        ? "text-green-600"
+                                        : booking.status === "canceled"
+                                          ? "text-red-600"
+                                          : "text-blue-600";
+
+                                    return (
+                                      <div key={booking._id} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-3 w-3 text-muted-foreground" />
+                                          <span>{format(new Date(booking.time), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                                          <span className="text-muted-foreground">•</span>
+                                          <span>{booking.service?.name || "Serviço"}</span>
+                                        </div>
+                                        <Badge variant="outline" className={bookingStatusColor}>
+                                          {booking.status === "completed"
+                                            ? "Concluído"
+                                            : booking.status === "canceled"
+                                              ? "Cancelado"
+                                              : booking.status === "confirmed"
+                                                ? "Confirmado"
+                                                : booking.status}
+                                        </Badge>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {subscription.autoRenew && isActive && (
+                              <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 p-2 rounded">
+                                <CreditCard className="h-3 w-3" />
+                                Renovação automática ativa
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })()
+            )}
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPlanHistoryModalOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

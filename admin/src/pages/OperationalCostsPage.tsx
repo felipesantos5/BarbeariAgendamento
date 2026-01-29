@@ -312,7 +312,7 @@ export function OperationalCostsPage() {
                 {selectedType !== "all" && ` - ${getTypeLabel(selectedType)}`}
               </CardDescription>
             </div>
-            <div className="w-full sm:w-[200px]">
+            <div className="">
               <Select value={selectedType} onValueChange={setSelectedType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Filtrar por tipo" />

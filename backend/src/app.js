@@ -7,6 +7,7 @@ import path from "path";
 import mongoose from "mongoose";
 
 import connectDB from "./config/db.js";
+import { getRedisClient } from "./config/redis.js";
 import helmet from "helmet";
 import barbershopRoutes from "./routes/barbershopRoutes.js";
 import barberRoutes from "./routes/barberRoutes.js";
@@ -50,6 +51,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 connectDB();
+getRedisClient();
 
 const app = express();
 
@@ -177,7 +179,15 @@ function gracefulShutdown(signal) {
   stopAllCronJobs();
   console.log("[SHUTDOWN] Cron jobs parados.");
 
-  // 3. Fecha conexao com MongoDB
+  // 3. Fecha Redis
+  getRedisClient().then((redisClient) => {
+    if (redisClient) {
+      redisClient.disconnect();
+      console.log("[SHUTDOWN] Redis desconectado.");
+    }
+  });
+
+  // 4. Fecha conexao com MongoDB
   mongoose.connection.close(false).then(() => {
     console.log("[SHUTDOWN] MongoDB desconectado.");
     process.exit(0);
@@ -186,7 +196,7 @@ function gracefulShutdown(signal) {
     process.exit(1);
   });
 
-  // 4. Timeout de seguranca - se nao fechar em 10s, forca o exit
+  // 5. Timeout de seguranca - se nao fechar em 10s, forca o exit
   setTimeout(() => {
     console.error("[SHUTDOWN] Timeout! Forcando encerramento.");
     process.exit(1);

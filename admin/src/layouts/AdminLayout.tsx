@@ -313,13 +313,16 @@ export function AdminLayout() {
   const SidebarContent = () => (
     <>
       <div className="p-5 pt-3">
-        <h1 className="text-2xl font-bold text-white mb-1">Painel</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-white mb-1">Painel</h1>
+          <img src={barbershop.image} alt="Logo Barbearia" className="w-1/3" />
+        </div>
         <div>
           <div>
             {/* <h2 className="text-sm font-medium text-rose-400 truncate" title={barbershop!.name}>
               {barbershop!.name}
             </h2> */}
-            <img src={barbershop.image} alt="Logo Barbearia" className="w-2/3" />
+            {/* <img src={barbershop.image} alt="Logo Barbearia" className="w-2/3" /> */}
             {/* Botão Link de Agendamento */}
             <a
               href={`https://barbeariagendamento.com.br/${barbershop.slug}`}

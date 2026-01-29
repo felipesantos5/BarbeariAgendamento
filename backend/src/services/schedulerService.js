@@ -36,7 +36,8 @@ const sendDailyReminders = async (triggerHour) => {
     })
       .populate("customer")
       .populate("barber")
-      .populate("barbershop");
+      .populate("barbershop")
+      .lean(); // Read-only query optimization
 
     if (bookings.length === 0) {
       console.log(`-> Nenhum agendamento encontrado para hoje.`);

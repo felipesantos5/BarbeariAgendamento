@@ -475,4 +475,72 @@ router.delete("/:customerId/subscriptions/:subscriptionId", protectAdmin, requir
   }
 });
 
+// GET /:customerId/plan-history
+// Retorna histórico de TODOS os planos do cliente (ativos, expirados, cancelados)
+// com a contagem de agendamentos realizados em cada um
+router.get("/:customerId/plan-history", protectAdmin, requireRole("admin", "barber"), async (req, res) => {
+  try {
+    const { barbershopId, customerId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: "ID do cliente inválido." });
+    }
+
+    // Busca TODAS as subscriptions do cliente para esta barbearia
+    const subscriptions = await Subscription.find({
+      customer: customerId,
+      barbershop: barbershopId,
+    })
+      .populate("plan", "name totalCredits durationInDays price")
+      .populate("barber", "name")
+      .sort({ createdAt: -1 }); // Mais recentes primeiro
+
+    // Para cada subscription, contar quantos bookings foram feitos
+    const historyWithBookings = await Promise.all(
+      subscriptions.map(async (subscription) => {
+        // Conta bookings que usaram esta subscription
+        const bookingsCount = await Booking.countDocuments({
+          subscriptionUsed: subscription._id,
+          barbershop: barbershopId,
+        });
+
+        // Busca os bookings completos para detalhamento
+        const bookings = await Booking.find({
+          subscriptionUsed: subscription._id,
+          barbershop: barbershopId,
+        })
+          .select("time status service")
+          .populate("service", "name")
+          .sort({ time: -1 });
+
+        return {
+          _id: subscription._id,
+          plan: subscription.plan,
+          startDate: subscription.startDate,
+          endDate: subscription.endDate,
+          status: subscription.status,
+          creditsRemaining: subscription.creditsRemaining,
+          totalCredits: subscription.plan?.totalCredits || 0,
+          creditsUsed: (subscription.plan?.totalCredits || 0) - subscription.creditsRemaining,
+          barber: subscription.barber, // Quem vendeu
+          bookingsCount,
+          bookings,
+          createdAt: subscription.createdAt,
+          autoRenew: subscription.autoRenew,
+          mercadoPagoPreapprovalId: subscription.mercadoPagoPreapprovalId,
+        };
+      })
+    );
+
+    res.status(200).json({
+      customerId,
+      totalSubscriptions: historyWithBookings.length,
+      subscriptions: historyWithBookings,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar histórico de planos:", error);
+    res.status(500).json({ error: "Erro ao buscar histórico de planos." });
+  }
+});
+
 export default router;

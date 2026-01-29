@@ -486,7 +486,8 @@ router.get("/bookings/barber", protectAdmin, checkAccountStatus, async (req, res
       .populate("barber", "name")
       .populate("service", "name price")
       .populate("customer", "name phone whatsapp") // Incluindo 'whatsapp' se existir
-      .sort({ time: 1 }); // Ordena do mais próximo para o mais distante
+      .sort({ time: 1 })
+      .lean(); // Read-only query optimization
 
     res.json(bookings);
   } catch (error) {

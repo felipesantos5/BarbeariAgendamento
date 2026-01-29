@@ -139,12 +139,8 @@ router.post("/webhook", async (req, res) => {
   const notification = req.body;
   const { barbershopId } = req.query;
 
-  console.log("🔔 ========== WEBHOOK DE ASSINATURA ==========");
-  console.log("🔔 Body completo:", JSON.stringify(notification, null, 2));
-  console.log("🔔 Query params:", req.query);
-  console.log("🔔 Type:", notification.type);
-  console.log("🔔 Action:", notification.action);
-  console.log("🔔 Data ID:", notification.data?.id);
+  const logPrefix = `[WEBHOOK-SUB ${notification.type}]`;
+  console.log(`${logPrefix} ID: ${notification.data?.id}`);
 
   // Responder 200 imediatamente para o MP não reenviar
   res.sendStatus(200);
@@ -159,21 +155,10 @@ router.post("/webhook", async (req, res) => {
     const notificationType = notification.type;
     const dataId = notification.data?.id;
 
-    if (!dataId) {
-      console.log("⚠️ Webhook: Sem data.id, ignorando.");
-      return;
-    }
-
-    if (!barbershopId) {
-      console.error("❌ Webhook: barbershopId não fornecido na query.");
-      return;
-    }
+    if (!dataId || !barbershopId) return;
 
     const barbershop = await Barbershop.findById(barbershopId);
-    if (!barbershop || !barbershop.mercadoPagoAccessToken) {
-      console.error(`❌ Webhook: Barbearia ${barbershopId} não encontrada ou sem token.`);
-      return;
-    }
+    if (!barbershop?.mercadoPagoAccessToken) return;
 
     const client = new MercadoPagoConfig({
       accessToken: barbershop.mercadoPagoAccessToken,
@@ -181,13 +166,8 @@ router.post("/webhook", async (req, res) => {
 
     // ========== PROCESSAR SUBSCRIPTION_PREAPPROVAL ==========
     if (notificationType === "subscription_preapproval") {
-      console.log(`📋 Processando subscription_preapproval ID: ${dataId}`);
-
       const preapproval = new PreApproval(client);
       const preapprovalData = await preapproval.get({ id: dataId });
-
-      console.log(`📋 Preapproval Status: ${preapprovalData.status}`);
-      console.log(`📋 Preapproval external_reference: ${preapprovalData.external_reference}`);
 
       // Tentar encontrar subscription pelo mercadoPagoPreapprovalId
       let subscription = await Subscription.findOne({
@@ -209,46 +189,32 @@ router.post("/webhook", async (req, res) => {
         }
       }
 
-      if (!subscription) {
-        console.error(`❌ Subscription não encontrada para preapproval ${dataId}`);
-        return;
-      }
-
-      console.log(`📋 Subscription encontrada: ${subscription._id}, status atual: ${subscription.status}`);
+      if (!subscription) return;
 
       // Atualizar baseado no status do preapproval
       if (preapprovalData.status === "authorized" || preapprovalData.status === "pending") {
-        // "authorized" = cliente autorizou o pagamento recorrente
-        // "pending" com primeiro pagamento pode significar que está ativo
         if (subscription.status === "pending") {
           subscription.status = "active";
           subscription.lastPaymentDate = new Date();
           subscription.nextPaymentDate = new Date();
           subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
           await subscription.save();
-          console.log(`✅ Subscription ${subscription._id} ATIVADA! Créditos: ${subscription.creditsRemaining}`);
+          console.log(`✅ Subscription ${subscription._id} ativada`);
         }
       } else if (preapprovalData.status === "paused") {
         subscription.autoRenew = false;
         await subscription.save();
-        console.log(`⏸️ Subscription ${subscription._id} pausada.`);
       } else if (preapprovalData.status === "cancelled") {
         subscription.autoRenew = false;
         await subscription.save();
-        console.log(`🚫 Subscription ${subscription._id} cancelada no MP.`);
       }
     }
 
     // ========== PROCESSAR PAYMENT ==========
     if (notificationType === "payment") {
-      console.log(`💰 Processando payment ID: ${dataId}`);
-
       const { Payment } = await import("mercadopago");
       const payment = new Payment(client);
       const paymentData = await payment.get({ id: dataId });
-
-      console.log(`💰 Payment status: ${paymentData.status}`);
-      console.log(`💰 Payment preapproval_id: ${paymentData.preapproval_id}`);
 
       if (paymentData.status === "approved" && paymentData.preapproval_id) {
         const subscription = await Subscription.findOne({
@@ -256,8 +222,6 @@ router.post("/webhook", async (req, res) => {
         }).populate("plan");
 
         if (subscription) {
-          console.log(`💰 Subscription encontrada: ${subscription._id}`);
-
           // Se está pending, é o primeiro pagamento - ativar
           if (subscription.status === "pending") {
             subscription.status = "active";
@@ -265,7 +229,7 @@ router.post("/webhook", async (req, res) => {
             subscription.nextPaymentDate = new Date();
             subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
             await subscription.save();
-            console.log(`✅ Subscription ${subscription._id} ATIVADA pelo pagamento!`);
+            console.log(`✅ Subscription ${subscription._id} ativada`);
           }
           // Se já está active, é renovação
           else if (subscription.status === "active" || subscription.status === "expired") {
@@ -279,22 +243,14 @@ router.post("/webhook", async (req, res) => {
             subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
             subscription.status = "active";
             await subscription.save();
-            console.log(`🔄 Subscription ${subscription._id} RENOVADA! Créditos: ${subscription.creditsRemaining}`);
+            console.log(`🔄 Subscription ${subscription._id} renovada`);
           }
-        } else {
-          console.error(`❌ Subscription não encontrada para preapproval_id: ${paymentData.preapproval_id}`);
         }
       }
     }
 
     // ========== PROCESSAR SUBSCRIPTION_AUTHORIZED_PAYMENT ==========
-    if (notificationType === "subscription_authorized_payment") {
-      console.log(`💳 Processando subscription_authorized_payment ID: ${dataId}`);
-      // Este evento indica que um pagamento da assinatura foi autorizado
-      // Geralmente vem junto com o payment, então já processamos acima
-    }
-
-    console.log("🔔 ========== FIM DO WEBHOOK ==========");
+    // Este evento geralmente vem junto com o payment, então não precisa processar
   } catch (error) {
     console.error("❌ Erro ao processar webhook de assinatura:", error);
   }

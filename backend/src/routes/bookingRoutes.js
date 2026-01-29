@@ -18,14 +18,24 @@ import { z } from "zod";
 import { ptBR } from "date-fns/locale";
 import { toZonedTime } from "date-fns-tz";
 import { appointmentLimiter } from "../middleware/rateLimiting.js";
-import { addClient, removeClient, sendEventToBarbershop } from "../services/sseService.js";
+import { addClient, removeClient, sendEventToBarbershop, getConnectionStats } from "../services/sseService.js";
 import { MercadoPagoConfig, Preference } from "mercadopago";
+import { cacheService } from "../config/redis.js";
 
 const router = express.Router({ mergeParams: true });
 
 const rescheduleSchema = z.object({
   newTime: z.string().datetime({ message: "Formato de data e hora inválido" }),
 });
+
+// Cache helpers
+const generateAvailabilityCacheKey = (barberId, year, month, serviceId) => {
+  return `availability:${barberId}:${year}:${month}:${serviceId}`;
+};
+
+const invalidateAvailabilityCache = async (barberId) => {
+  await cacheService.delPattern(`availability:${barberId}:*`);
+};
 
 router.post("/", appointmentLimiter, async (req, res) => {
   try {
@@ -116,6 +126,9 @@ router.post("/", appointmentLimiter, async (req, res) => {
     }
 
     const createdBooking = await Booking.create(bookingPayload);
+
+    // Invalidate availability cache
+    await invalidateAvailabilityCache(data.barber);
 
     if (activeSubscription) {
       activeSubscription.creditsRemaining -= 1;
@@ -348,6 +361,9 @@ router.put(
       booking.status = status;
       await booking.save();
 
+      // Invalidate availability cache
+      await invalidateAvailabilityCache(booking.barber.toString());
+
       // 5. Retornar a resposta de sucesso com o agendamento atualizado
       res.status(200).json({
         success: true,
@@ -412,6 +428,9 @@ router.put(
       // 5. Se tudo estiver certo, atualiza o status
       booking.status = "canceled";
       await booking.save();
+
+      // Invalidate availability cache
+      await invalidateAvailabilityCache(booking.barber.toString());
 
       // Você pode adicionar uma notificação de WhatsApp para o admin/barbeiro aqui se desejar
 
@@ -498,6 +517,15 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
       return res.status(400).json({ error: "Ano, mês e serviço são obrigatórios." });
     }
 
+    // Check cache first
+    const cacheKey = generateAvailabilityCacheKey(barberId, year, month, serviceId);
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      console.log(`[CACHE HIT] Monthly availability for barber ${barberId}`);
+      return res.status(200).json(cached);
+    }
+    console.log(`[CACHE MISS] Monthly availability for barber ${barberId}`);
+
     const startDate = startOfMonth(new Date(parseInt(year), parseInt(month) - 1));
     const endDate = endOfMonth(startDate);
 
@@ -535,14 +563,26 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
 
     const availabilityMap = new Map(barber.availability.map((a) => [a.day.toLowerCase(), a]));
 
+    // Pre-index blocked days in Set for O(1) lookup
+    const blockedDaysSet = new Set(blockedDays.map((blocked) => format(new Date(blocked.date), "yyyy-MM-dd")));
+
+    // Group bookings by day in Map for faster access
+    const bookingsByDay = new Map();
+    for (const booking of bookings) {
+      const dayStr = format(new Date(booking.time), "yyyy-MM-dd");
+      if (!bookingsByDay.has(dayStr)) {
+        bookingsByDay.set(dayStr, []);
+      }
+      bookingsByDay.get(dayStr).push(booking);
+    }
+
     // 2. Iterar sobre cada dia do mês
     for (const day of daysInMonth) {
       const dayString = format(day, "yyyy-MM-dd");
       const dayOfWeekName = format(day, "EEEE", { locale: ptBR });
 
-      // Causa #1: Dia bloqueado
-      const isDayBlocked = blockedDays.some((blocked) => format(new Date(blocked.date), "yyyy-MM-dd") === dayString);
-      if (isDayBlocked) {
+      // Causa #1: Dia bloqueado (O(1) lookup)
+      if (blockedDaysSet.has(dayString)) {
         unavailableDays.add(dayString);
         continue;
       }
@@ -566,7 +606,7 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
       const dayEnd = new Date(day);
       dayEnd.setHours(endWorkH, endWorkM, 0, 0);
 
-      const todaysBookings = bookings.filter((b) => format(new Date(b.time), "yyyy-MM-dd") === dayString);
+      const todaysBookings = bookingsByDay.get(dayString) || [];
       const todaysTimeBlocks = timeBlocks.filter((tb) => tb.startTime < dayEnd && tb.endTime > dayStart);
 
       // ---- VALIDAÇÃO ADICIONADA ----
@@ -622,7 +662,12 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
       }
     }
 
-    res.status(200).json({ unavailableDays: Array.from(unavailableDays) });
+    const result = { unavailableDays: Array.from(unavailableDays) };
+
+    // Save to cache (5 min TTL)
+    await cacheService.set(cacheKey, result, 300);
+
+    res.status(200).json(result);
   } catch (error) {
     console.error("Erro ao buscar disponibilidade mensal:", error);
     res.status(500).json({ error: "Erro ao processar disponibilidade." });
@@ -700,6 +745,9 @@ router.delete("/:bookingId", async (req, res) => {
 
     // Agora deleta o booking
     await Booking.findByIdAndDelete(bookingId);
+
+    // Invalidate availability cache
+    await invalidateAvailabilityCache(booking.barber.toString());
 
     const barbershop = await Barbershop.findById(barbershopId);
 
@@ -826,6 +874,9 @@ router.patch("/:bookingId/reschedule", async (req, res) => {
     // booking.status = "confirmed";
     await booking.save();
 
+    // Invalidate availability cache
+    await invalidateAvailabilityCache(booking.barber._id.toString());
+
     // 5. (Opcional) Notificar o cliente sobre o reagendamento
     const formattedNewTime = format(newBookingTime, "dd/MM/yyyy 'às' HH:mm", {
       locale: ptBR,
@@ -849,6 +900,12 @@ router.patch("/:bookingId/reschedule", async (req, res) => {
     }
     res.status(500).json({ error: "Ocorreu um erro interno ao reagendar." });
   }
+});
+
+// SSE stats endpoint
+router.get("/sse-stats", protectAdmin, (req, res) => {
+  const stats = getConnectionStats();
+  res.status(200).json(stats);
 });
 
 export default router;

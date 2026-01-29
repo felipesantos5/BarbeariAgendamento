@@ -194,6 +194,10 @@ export function MyBookingsPage() {
         return { text: "Concluído", className: "bg-green-100 text-green-800" };
       case "canceled":
         return { text: "Cancelado", className: "bg-red-100 text-red-800" };
+      case "payment_expired":
+        return { text: "Pagamento Expirado", className: "bg-orange-100 text-orange-800" };
+      case "pending_payment":
+        return { text: "Aguardando Pagamento", className: "bg-yellow-100 text-yellow-800" };
       default:
         return { text: "Agendado", className: "bg-blue-100 text-blue-800" };
     }
@@ -295,11 +299,16 @@ export function MyBookingsPage() {
                 <div className="space-y-3">
                   {upcomingBookings.map((booking) => {
                     const statusInfo = getStatusInfo(booking.status);
-                    const canBeCancelled = booking.status === "booked" || booking.status === "confirmed";
+                    const canBeCancelled =
+                      booking.status === "booked" ||
+                      booking.status === "confirmed" ||
+                      booking.status === "pending_payment";
                     const showPayButton =
                       booking.barbershop.paymentsEnabled === true &&
                       booking.paymentStatus !== "approved" &&
-                      booking.status !== "canceled";
+                      booking.status !== "canceled" &&
+                      booking.status !== "payment_expired" &&
+                      (booking.status === "pending_payment" || booking.status === "booked");
                     const showPaiedBadge =
                       booking.barbershop.paymentsEnabled === true &&
                       booking.paymentStatus === "approved" &&
@@ -462,12 +471,28 @@ export function MyBookingsPage() {
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
-                              {booking.service?.name || "Serviço"}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {format(new Date(booking.time), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
-                            </p>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                {booking.service?.name || "Serviço"}
+                              </p>
+                              {booking.barber?.name && (
+                                <>
+                                  <span className="text-gray-300">•</span>
+                                  <p className="text-xs text-gray-500 truncate">{booking.barber.name}</p>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span>{format(new Date(booking.time), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}</span>
+                              {booking.service?.price && (
+                                <>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="font-medium">
+                                    R$ {booking.service.price.toFixed(2).replace(".", ",")}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <Badge className={`${statusInfo.className} border text-xs`}>{statusInfo.text}</Badge>
                         </div>
@@ -507,10 +532,19 @@ export function MyBookingsPage() {
 
         {/* TAB: Meus Planos */}
         {activeTab === "planos" && (
-          <section>
+          <section className="space-y-8">
             {subscriptions.length > 0 ? (
-              <div className="space-y-4">
-                {subscriptions.map((subscription) => {
+              <>
+                {/* Planos Ativos */}
+                {subscriptions.filter((s) => s.status === "active").length > 0 && (
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Meus Planos Ativos
+                    </h2>
+                    {subscriptions
+                      .filter((s) => s.status === "active")
+                      .map((subscription) => {
                   const statusInfo = getSubscriptionStatusInfo(subscription.status, subscription.autoRenew);
                   const isActive = subscription.status === "active";
                   const canCancel = isActive && subscription.autoRenew;
@@ -658,10 +692,72 @@ export function MyBookingsPage() {
                           </AlertDialog>
                         </div>
                       )}
-                    </Card>
-                  );
-                })}
-              </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Planos Inativos (Expirados/Cancelados) */}
+                {subscriptions.filter((s) => s.status !== "active").length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4" />
+                      Histórico de Planos
+                    </h3>
+                    <div className="space-y-2">
+                      {subscriptions
+                        .filter((s) => s.status !== "active")
+                        .map((subscription) => {
+                          const statusInfo = getSubscriptionStatusInfo(subscription.status, subscription.autoRenew);
+
+                          return (
+                            <Card
+                              key={subscription._id}
+                              className="bg-gray-50/50 dark:bg-gray-800/50 shadow-none border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            >
+                              <div className="p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    {subscription.barbershop.logoUrl && (
+                                      <img
+                                        src={subscription.barbershop.logoUrl}
+                                        alt=""
+                                        className="w-8 h-8 object-contain rounded bg-white border flex-shrink-0"
+                                      />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 truncate">
+                                          {subscription.plan.name}
+                                        </h4>
+                                        <Badge className={`${statusInfo.className} border text-xs flex-shrink-0`}>
+                                          {statusInfo.text}
+                                        </Badge>
+                                      </div>
+                                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                                        <span className="flex items-center gap-1">
+                                          <Clock className="h-3 w-3" />
+                                          {format(new Date(subscription.startDate), "dd/MM/yy", { locale: ptBR })} até{" "}
+                                          {format(new Date(subscription.endDate), "dd/MM/yy", { locale: ptBR })}
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                          <CreditCard className="h-3 w-3" />
+                                          {subscription.plan.totalCredits - subscription.creditsRemaining}/
+                                          {subscription.plan.totalCredits} créditos usados
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-16 px-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed">
                 <Star className="mx-auto h-12 w-12 text-gray-300" />

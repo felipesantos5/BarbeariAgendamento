@@ -799,12 +799,18 @@ export function AgendamentosPage() {
                       {/* Rodapé com o Status e os Botões de Ação */}
                       <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center gap-2">
                         {/* Lado Esquerdo: Status */}
-                        <div className="flex gap-2 items-center flex-wrap">
-                          <Badge className={getStatusInfo(selectedBooking).className}>{getStatusInfo(selectedBooking).text}</Badge>
+                        <div className="flex gap-4 items-end flex-wrap">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Status</span>
+                            <Badge className={getStatusInfo(selectedBooking).className}>{getStatusInfo(selectedBooking).text}</Badge>
+                          </div>
                           {paymentsEnabled && selectedBooking.paymentStatus && (
-                            <Badge className={getPaymentStatusInfo(selectedBooking).className}>
-                              {translatePaymentStatus(selectedBooking.paymentStatus).text}
-                            </Badge>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Pagamento</span>
+                              <Badge className={getPaymentStatusInfo(selectedBooking).className}>
+                                {translatePaymentStatus(selectedBooking.paymentStatus).text}
+                              </Badge>
+                            </div>
                           )}
                         </div>
 
