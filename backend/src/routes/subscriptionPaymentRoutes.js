@@ -159,6 +159,10 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
     });
 
     // Criar preapproval no Mercado Pago
+    const notificationUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
+
+    console.log("📋 Criando PreApproval com notification_url:", notificationUrl);
+
     const preapprovalData = {
       body: {
         reason: `Plano ${plan.name} - ${barbershop.name}`,
@@ -171,11 +175,17 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
         payer_email: `cliente_${customer._id}@barbeariagendamento.com.br`,
         back_url: `https://barbeariagendamento.com.br/${barbershop.slug}/assinatura-sucesso`,
         external_reference: externalReference,
-        notification_url: `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`,
+        notification_url: notificationUrl,
       },
     };
 
+    console.log("📤 Enviando PreApproval para Mercado Pago...");
     const result = await preapproval.create(preapprovalData);
+    console.log("✅ PreApproval criado:", {
+      id: result.id,
+      status: result.status,
+      init_point: result.init_point,
+    });
 
     // Salvar ID do preapproval na subscription
     subscription.mercadoPagoPreapprovalId = result.id;
@@ -195,54 +205,130 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
   }
 });
 
+// GET /api/barbershops/:barbershopId/subscriptions/webhook
+// Endpoint de teste para verificar se URL está acessível
+router.get("/webhook", async (req, res) => {
+  console.log("🔍 Webhook GET recebido - endpoint está acessível!");
+  console.log("Query params:", req.query);
+  console.log("Headers:", req.headers);
+  res.json({
+    status: "ok",
+    message: "Webhook endpoint está funcionando!",
+    timestamp: new Date().toISOString(),
+    receivedParams: req.query,
+  });
+});
+
 // POST /api/barbershops/:barbershopId/subscriptions/webhook
 // Recebe notificações do Mercado Pago sobre assinaturas
 router.post("/webhook", async (req, res) => {
   const notification = req.body;
-  const { barbershopId } = req.query;
 
-  const logPrefix = `[WEBHOOK-SUB ${notification.type}]`;
+  // Tentar extrair barbershopId de múltiplas fontes
+  let barbershopId = req.query.barbershopId || req.params.barbershopId;
+
+  const logPrefix = `[WEBHOOK-SUB ${notification.type || 'unknown'}]`;
+  console.log(`\n${"=".repeat(80)}`);
+  console.log(`${logPrefix} 🔔 WEBHOOK RECEBIDO`);
   console.log(`${logPrefix} ID: ${notification.data?.id}`);
-  console.log(`${logPrefix} Body completo:`, JSON.stringify(notification, null, 2));
+  console.log(`${logPrefix} Query params:`, req.query);
+  console.log(`${logPrefix} Route params:`, req.params);
+  console.log(`${logPrefix} Body:`, JSON.stringify(notification, null, 2));
   console.log(`${logPrefix} Headers:`, {
     "x-signature": req.headers["x-signature"] ? "presente" : "ausente",
-    "x-request-id": req.headers["x-request-id"] ? "presente" : "ausente",
+    "x-request-id": req.headers["x-request-id"] || "ausente",
   });
 
   // Responder 200 imediatamente para o MP não reenviar
   res.sendStatus(200);
 
   try {
-    // Buscar barbershop para validar assinatura
-    if (barbershopId) {
-      const barbershop = await Barbershop.findById(barbershopId);
+    const notificationType = notification.type;
+    const dataId = notification.data?.id;
 
-      // Se tem webhook secret configurado, validar assinatura
-      if (barbershop?.mercadoPagoWebhookSecret) {
-        const isValid = validateWebhookSignature(req, barbershop.mercadoPagoWebhookSecret);
+    if (!dataId) {
+      console.log(`${logPrefix} ⚠️ data.id ausente - abortando`);
+      return;
+    }
 
-        if (!isValid) {
-          console.log(`${logPrefix} ❌ Assinatura inválida - webhook rejeitado`);
-          return; // Não processar webhook com assinatura inválida
+    // Se não tem barbershopId nos params, tentar extrair do preapproval
+    if (!barbershopId) {
+      console.log(`${logPrefix} ⚠️ barbershopId não encontrado em query/params`);
+      console.log(`${logPrefix} 🔍 Tentando extrair de external_reference...`);
+
+      // Buscar o preapproval para pegar external_reference
+      try {
+        const { MercadoPagoConfig, PreApproval } = await import("mercadopago");
+
+        // Precisamos de algum barbershop para buscar - vamos buscar todos e tentar encontrar
+        const allBarbershops = await Barbershop.find({ mercadoPagoAccessToken: { $exists: true, $ne: null } });
+
+        for (const shop of allBarbershops) {
+          try {
+            const client = new MercadoPagoConfig({ accessToken: shop.mercadoPagoAccessToken });
+            const preapproval = new PreApproval(client);
+            const preapprovalData = await preapproval.get({ id: dataId });
+
+            if (preapprovalData.external_reference) {
+              const refData = JSON.parse(preapprovalData.external_reference);
+              if (refData.barbershopId) {
+                barbershopId = refData.barbershopId;
+                console.log(`${logPrefix} ✅ barbershopId encontrado em external_reference: ${barbershopId}`);
+                break;
+              }
+            }
+          } catch (e) {
+            // Continuar tentando com próximo barbershop
+            continue;
+          }
         }
-      } else {
-        console.log(`${logPrefix} ⚠️ Webhook secret não configurado - processando sem validação`);
+      } catch (error) {
+        console.log(`${logPrefix} ❌ Erro ao buscar external_reference:`, error.message);
       }
+
+      if (!barbershopId) {
+        console.log(`${logPrefix} ❌ Impossível determinar barbershopId - abortando`);
+        return;
+      }
+    }
+
+    console.log(`${logPrefix} 🏪 Barbershop ID: ${barbershopId}`);
+
+    // Buscar barbershop para validar assinatura
+    const barbershop = await Barbershop.findById(barbershopId);
+
+    if (!barbershop) {
+      console.log(`${logPrefix} ❌ Barbershop não encontrada: ${barbershopId}`);
+      return;
+    }
+
+    if (!barbershop.mercadoPagoAccessToken) {
+      console.log(`${logPrefix} ❌ Barbershop sem token do MP configurado`);
+      return;
+    }
+
+    // Se tem webhook secret configurado, validar assinatura
+    if (barbershop.mercadoPagoWebhookSecret) {
+      const isValid = validateWebhookSignature(req, barbershop.mercadoPagoWebhookSecret);
+
+      if (!isValid) {
+        console.log(`${logPrefix} ❌ Assinatura inválida - webhook rejeitado`);
+        return;
+      }
+      console.log(`${logPrefix} ✅ Assinatura validada com sucesso`);
+    } else {
+      console.log(`${logPrefix} ⚠️ Webhook secret não configurado - processando sem validação`);
     }
 
     // Tipos de notificação do MP para subscriptions:
     // - subscription_preapproval (criação/atualização)
     // - subscription_authorized_payment (pagamento autorizado)
     // - payment (pagamento processado)
-    // - updated (atualização genérica - usado pelo MP em alguns casos)
 
-    const notificationType = notification.type;
-    const dataId = notification.data?.id;
-
-    if (!dataId || !barbershopId) return;
-
-    const barbershop = await Barbershop.findById(barbershopId);
-    if (!barbershop?.mercadoPagoAccessToken) return;
+    if (!notificationType) {
+      console.log(`${logPrefix} ⚠️ Tipo de notificação ausente`);
+      return;
+    }
 
     const client = new MercadoPagoConfig({
       accessToken: barbershop.mercadoPagoAccessToken,
@@ -511,6 +597,73 @@ router.put("/:subscriptionId/activate", protectAdmin, async (req, res) => {
   } catch (error) {
     console.error("Erro ao ativar subscription:", error);
     res.status(500).json({ error: "Falha ao ativar assinatura." });
+  }
+});
+
+// GET /api/barbershops/:barbershopId/subscriptions/:subscriptionId/webhook-diagnostics
+// Diagnóstico de webhook - verifica se MP está configurado para enviar webhooks
+router.get("/:subscriptionId/webhook-diagnostics", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId, subscriptionId } = req.params;
+
+    const subscription = await Subscription.findOne({
+      _id: subscriptionId,
+      barbershop: barbershopId,
+    }).populate("plan").populate("customer", "name phone");
+
+    if (!subscription) {
+      return res.status(404).json({ error: "Assinatura não encontrada." });
+    }
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop?.mercadoPagoAccessToken) {
+      return res.status(400).json({ error: "Token do MP não configurado." });
+    }
+
+    const diagnostics = {
+      subscription: {
+        _id: subscription._id,
+        status: subscription.status,
+        mercadoPagoPreapprovalId: subscription.mercadoPagoPreapprovalId,
+        customer: subscription.customer,
+        plan: subscription.plan,
+      },
+      webhookConfiguration: {
+        expectedUrl: `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook`,
+        hasWebhookSecret: !!barbershop.mercadoPagoWebhookSecret,
+        tokenType: barbershop.mercadoPagoAccessToken.startsWith("TEST-") ? "TESTE (⚠️ Use produção!)" : "PRODUÇÃO ✅",
+      },
+      mercadoPagoPreapproval: null,
+    };
+
+    // Buscar dados do preapproval no MP
+    if (subscription.mercadoPagoPreapprovalId) {
+      try {
+        const client = new MercadoPagoConfig({
+          accessToken: barbershop.mercadoPagoAccessToken,
+        });
+        const preapproval = new PreApproval(client);
+        const preapprovalData = await preapproval.get({ id: subscription.mercadoPagoPreapprovalId });
+
+        diagnostics.mercadoPagoPreapproval = {
+          id: preapprovalData.id,
+          status: preapprovalData.status,
+          notification_url: preapprovalData.notification_url || "❌ NÃO CONFIGURADA!",
+          external_reference: preapprovalData.external_reference,
+          payer_email: preapprovalData.payer_email,
+          date_created: preapprovalData.date_created,
+        };
+      } catch (mpError) {
+        diagnostics.mercadoPagoPreapproval = {
+          error: mpError.message || "Erro ao consultar MP",
+        };
+      }
+    }
+
+    res.json(diagnostics);
+  } catch (error) {
+    console.error("Erro no diagnóstico:", error);
+    res.status(500).json({ error: "Falha no diagnóstico." });
   }
 });
 
