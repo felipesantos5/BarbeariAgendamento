@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CreditCard,
   Receipt,
+  MessageCircle,
 } from "lucide-react"; // Ícones de exemplo
 import { useAuth } from "@/contexts/AuthContext";
 import apiClient from "@/services/api";
@@ -280,6 +281,12 @@ export function AdminLayout() {
           to: "custos-operacionais",
           label: "Custos Operacionais",
           icon: <Receipt className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
+        {
+          to: "whatsapp",
+          label: "WhatsApp",
+          icon: <MessageCircle className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
         {

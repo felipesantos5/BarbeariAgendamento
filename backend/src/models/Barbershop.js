@@ -84,6 +84,18 @@ const BarbershopSchema = new mongoose.Schema(
       enum: ["active", "trial", "inactive"],
       default: "active",
     },
+    whatsappConfig: {
+      enabled: { type: Boolean, default: false },
+      instanceName: { type: String, default: null },
+      connectionStatus: {
+        type: String,
+        enum: ["disconnected", "connecting", "connected"],
+        default: "disconnected"
+      },
+      connectedNumber: { type: String, default: null },
+      connectedAt: { type: Date, default: null },
+      lastCheckedAt: { type: Date, default: null }
+    },
   },
   { timestamps: true }
 );

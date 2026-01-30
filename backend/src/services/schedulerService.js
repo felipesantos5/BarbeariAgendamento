@@ -3,6 +3,7 @@ import Booking from "../models/Booking.js";
 import Barbershop from "../models/Barbershop.js";
 import Subscription from "../models/Subscription.js";
 import { sendWhatsAppConfirmation } from "./evolutionWhatsapp.js";
+import { sendWhatsAppMessage } from "./whatsappMessageService.js";
 import { startOfDay, endOfDay, getHours } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { format } from "date-fns";
@@ -76,7 +77,7 @@ const sendDailyReminders = async (triggerHour) => {
       const greeting = triggerHour === 8 ? "Bom dia" : "Ola";
       const message = `${greeting}, ${booking.customer.name}! Lembrete do seu agendamento hoje na ${booking.barbershop.name} as ${appointmentTimeFormatted} com ${booking.barber.name}\n\nPara mais informacoes, entre em contato com a barbearia: ${booking.barbershop.contact}\nEndereco: ${barberShopAdress}`;
 
-      const result = await sendWhatsAppConfirmation(customerPhone, message);
+      const result = await sendWhatsAppMessage(booking.barbershop._id.toString(), customerPhone, message);
 
       if (result.success) {
         sentCount++;

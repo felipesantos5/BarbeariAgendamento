@@ -4,6 +4,7 @@ import Barbershop from "../models/Barbershop.js";
 import Customer from "../models/Customer.js";
 import mongoose from "mongoose";
 import { sendWhatsAppConfirmation } from "./evolutionWhatsapp.js";
+import { sendWhatsAppMessage } from "./whatsappMessageService.js";
 import { subDays, startOfDay, startOfMonth } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
@@ -144,7 +145,7 @@ export const sendAutomatedReturnReminders = async () => {
 
         const message = `Olá, ${customer.name}! Sentimos sua falta na ${barbershop.name}. Já faz ${DAYS_SINCE_LAST_CUT} dias desde seu último corte. 💈\n\nQue tal agendar seu retorno?\n${agendamentoLink}`;
 
-        const result = await sendWhatsAppConfirmation(customer.phone, message);
+        const result = await sendWhatsAppMessage(barbershopId, customer.phone, message);
 
         if (result.success) {
           sentCount++;
