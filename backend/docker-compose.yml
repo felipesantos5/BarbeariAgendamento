@@ -32,9 +32,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4096M
+          memory: 1536M
         reservations:
-          memory: 1024M
+          memory: 512M
     networks:
       - app_network
 
@@ -58,9 +58,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2048M  # Limite máximo (Hard limit)
+          memory: 1024M  # Limite máximo (Hard limit)
         reservations:
-          memory: 512M
+          memory: 256M
     networks:
       - app_network
 
@@ -89,7 +89,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024M
+          memory: 512M
     networks:
       - app_network
 
