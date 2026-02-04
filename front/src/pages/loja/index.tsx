@@ -16,6 +16,7 @@ import { CustomerProductsPage } from "./sections/Products";
 import { ProductsApiResponse } from "@/types/Products";
 import { Service } from "@/types/Service";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useMetaTags } from "@/hooks/useMetaTags";
 
 export type Tab = {
   id: string;
@@ -46,6 +47,17 @@ export function Loja() {
       ? `${barbershop.name} - Agendamento Online`
       : "Barbearia Agendamento - Sistema de Agendamento Online"
   );
+
+  // Atualizar meta tags para compartilhamento correto em redes sociais
+  useMetaTags({
+    title: barbershop
+      ? `${barbershop.name} - Agendamento Online`
+      : "Barbearia Agendamento - Sistema de Agendamento Online",
+    description: barbershop?.description || "Agende seu horário na barbearia de forma online. Rápido, prático e seguro.",
+    image: barbershop?.logoUrl || "https://www.barbeariagendamento.com.br/logo.jpg",
+    url: slug ? `https://www.barbeariagendamento.com.br/${slug}` : "https://www.barbeariagendamento.com.br",
+    type: "website"
+  });
 
   useEffect(() => {
     if (!slug) {
