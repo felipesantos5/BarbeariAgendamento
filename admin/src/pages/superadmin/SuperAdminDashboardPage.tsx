@@ -19,8 +19,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Store, CalendarDays, Clock, AlertCircle, RefreshCw, Trash2 } from "lucide-react";
+import { Store, CalendarDays, Clock, AlertCircle, RefreshCw, Trash2, Plus, Power, Ban, MoreVertical, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CreateBarbershopModal } from "@/components/CreateBarbershopModal";
+import { ManagePlanModal } from "@/components/ManagePlanModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
 
 interface BarbershopData {
   _id: string;
@@ -55,6 +65,18 @@ export function SuperAdminDashboardPage() {
     shop: null,
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [planModal, setPlanModal] = useState<{
+    open: boolean;
+    barbershopId: string;
+    barbershopName: string;
+    subscription: any | null;
+  }>({
+    open: false,
+    barbershopId: "",
+    barbershopName: "",
+    subscription: null,
+  });
   const { token } = useSuperAdminAuth();
 
   const fetchData = async () => {
@@ -114,12 +136,74 @@ export function SuperAdminDashboardPage() {
     }
   };
 
+  const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+
+  const handleToggleStatus = async (barbershopId: string) => {
+    setTogglingStatus(barbershopId);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/superadmin/barbershops/${barbershopId}/toggle-status`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Erro ao alterar status da barbearia");
+      }
+
+      fetchData(); // Recarrega os dados
+    } catch (err: any) {
+      alert(err.message || "Erro ao alterar status da barbearia");
+    } finally {
+      setTogglingStatus(null);
+    }
+  };
+
+  const handleManagePlan = async (barbershopId: string, barbershopName: string) => {
+    try {
+      // Busca assinatura existente
+      const response = await fetch(
+        `${API_BASE_URL}/api/superadmin/billing/subscriptions/barbershop/${barbershopId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+        }
+      );
+
+      let subscription = null;
+      if (response.ok) {
+        subscription = await response.json();
+      }
+
+      setPlanModal({
+        open: true,
+        barbershopId,
+        barbershopName,
+        subscription,
+      });
+    } catch (err) {
+      console.error("Erro ao buscar assinatura:", err);
+      // Abre modal mesmo sem assinatura existente
+      setPlanModal({
+        open: true,
+        barbershopId,
+        barbershopName,
+        subscription: null,
+      });
+    }
+  };
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    if (!dateString) return "-";
+    const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
   };
 
   const getStatusBadge = (status: string, isTrial: boolean, trialDayNumber: number | null) => {
@@ -163,15 +247,26 @@ export function SuperAdminDashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <Button
-          onClick={fetchData}
-          variant="outline"
-          size="sm"
-          className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setCreateModalOpen(true)}
+            variant="default"
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nova Barbearia
+          </Button>
+          <Button
+            onClick={fetchData}
+            variant="outline"
+            size="sm"
+            className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* Cards de resumo */}
@@ -269,14 +364,62 @@ export function SuperAdminDashboardPage() {
                       {formatDate(shop.createdAt)}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-900/30"
-                        onClick={() => setDeleteModal({ open: true, shop })}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-slate-400 hover:text-white hover:bg-slate-700"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-slate-800 border-slate-700 text-white"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleToggleStatus(shop._id)}
+                            disabled={togglingStatus === shop._id}
+                            className="cursor-pointer hover:bg-slate-700 focus:bg-slate-700"
+                          >
+                            {togglingStatus === shop._id ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                Processando...
+                              </>
+                            ) : shop.accountStatus === "active" ? (
+                              <>
+                                <Ban className="w-4 h-4 mr-2 text-orange-400" />
+                                Desativar
+                              </>
+                            ) : (
+                              <>
+                                <Power className="w-4 h-4 mr-2 text-green-400" />
+                                Ativar
+                              </>
+                            )}
+                          </DropdownMenuItem>
+
+                          <DropdownMenuItem
+                            onClick={() => handleManagePlan(shop._id, shop.name)}
+                            className="cursor-pointer hover:bg-slate-700 focus:bg-slate-700"
+                          >
+                            <DollarSign className="w-4 h-4 mr-2 text-blue-400" />
+                            Gerenciar Plano
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator className="bg-slate-700" />
+
+                          <DropdownMenuItem
+                            onClick={() => setDeleteModal({ open: true, shop })}
+                            className="cursor-pointer hover:bg-red-900/30 focus:bg-red-900/30 text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Deletar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -331,6 +474,24 @@ export function SuperAdminDashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de criação de barbearia */}
+      <CreateBarbershopModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onSuccess={fetchData}
+      />
+
+      {/* Modal de gerenciamento de plano */}
+      <ManagePlanModal
+        open={planModal.open}
+        onOpenChange={(open) => setPlanModal({ ...planModal, open })}
+        barbershopId={planModal.barbershopId}
+        barbershopName={planModal.barbershopName}
+        currentSubscription={planModal.subscription}
+        onSuccess={fetchData}
+        token={token || ""}
+      />
     </div>
   );
 }

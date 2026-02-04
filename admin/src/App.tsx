@@ -28,6 +28,8 @@ import { OperationalCostsPage } from "./pages/OperationalCostsPage.tsx";
 import { WhatsAppConfigPage } from "./pages/WhatsAppConfigPage";
 import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
+import { SuperAdminBillingPage } from "./pages/superadmin/SuperAdminBillingPage";
+import { SuperAdminExpensesPage } from "./pages/superadmin/SuperAdminExpensesPage";
 
 export default function App() {
   return (
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="/superadmin" element={<SuperAdminLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<SuperAdminDashboardPage />} />
+            <Route path="billing" element={<SuperAdminBillingPage />} />
+            <Route path="expenses" element={<SuperAdminExpensesPage />} />
           </Route>
         </Route>
 
