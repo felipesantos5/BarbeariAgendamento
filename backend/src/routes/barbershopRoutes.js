@@ -67,6 +67,15 @@ router.get("/slug/:slug", async (req, res) => {
     if (!barbershop) {
       return res.status(404).json({ error: "Barbearia não encontrada" });
     }
+    
+    // Verifica se a conta está inativa
+    if (barbershop.accountStatus === "inactive") {
+      return res.status(403).json({ 
+        error: "Esta barbearia está temporariamente indisponível",
+        accountStatus: "inactive"
+      });
+    }
+    
     res.json(barbershop);
   } catch (e) {
     res.status(400).json({ error: "Erro na busca pela barbearia" });

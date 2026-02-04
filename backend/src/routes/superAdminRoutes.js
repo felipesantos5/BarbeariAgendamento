@@ -6,6 +6,8 @@ import Barber from "../models/Barber.js";
 import Service from "../models/Service.js";
 import Plan from "../models/Plan.js";
 import Subscription from "../models/Subscription.js";
+import { BarbershopCreationSchema } from "../validations/barbershopValidation.js";
+import { z } from "zod";
 import "dotenv/config";
 
 const router = express.Router();
@@ -29,6 +31,52 @@ function calcularDiaDoTrial(trialEndsAt) {
 
   return 8 - diasRestantes; // Dia 1 a 7
 }
+
+// POST /api/superadmin/barbershops - Criar nova barbearia
+router.post("/barbershops", async (req, res) => {
+  try {
+    // 1. Valida os dados usando o schema
+    const data = BarbershopCreationSchema.parse(req.body);
+
+    // 2. Separa os dados do admin dos dados da barbearia
+    const { adminEmail, adminPassword, ...barbershopData } = data;
+
+    // 3. Verifica se o email do admin já não está em uso
+    const existingAdmin = await AdminUser.findOne({ email: adminEmail });
+    if (existingAdmin) {
+      return res.status(409).json({ error: "O email fornecido para o admin já está em uso." });
+    }
+
+    // 4. Cria a barbearia
+    const newBarbershop = await Barbershop.create(barbershopData);
+
+    // 5. Cria o usuário Admin (dono)
+    const newAdmin = await AdminUser.create({
+      email: adminEmail,
+      password: adminPassword, // A senha será hasheada pelo hook 'pre-save' do modelo
+      barbershop: newBarbershop._id, // Associa o admin à barbearia
+      role: "admin", // Define a permissão
+      status: "active", // Já define como ativo, pois a senha foi criada
+    });
+
+    // 6. Responde com sucesso (omitindo dados sensíveis)
+    res.status(201).json({
+      barbershop: newBarbershop,
+      admin: {
+        _id: newAdmin._id,
+        email: newAdmin.email,
+        role: newAdmin.role,
+      },
+    });
+  } catch (e) {
+    // Trata erros de validação do Zod
+    if (e instanceof z.ZodError) {
+      return res.status(400).json({ error: "Dados inválidos.", details: e.errors });
+    }
+    // Trata outros erros (ex: slug duplicado)
+    res.status(400).json({ error: e.message || "Erro ao criar barbearia" });
+  }
+});
 
 // GET /api/superadmin/barbershops-overview
 router.get("/barbershops-overview", async (req, res) => {
@@ -154,6 +202,38 @@ router.delete("/barbershops/:barbershopId", async (req, res) => {
   } catch (error) {
     console.error("Erro ao deletar barbearia:", error);
     res.status(500).json({ error: "Erro ao deletar barbearia." });
+  }
+});
+
+// PATCH /api/superadmin/barbershops/:barbershopId/toggle-status
+router.patch("/barbershops/:barbershopId/toggle-status", async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    // Busca a barbearia
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    // Alterna o status entre 'active' e 'inactive'
+    const newStatus = barbershop.accountStatus === "active" ? "inactive" : "active";
+    
+    // Atualiza o status
+    barbershop.accountStatus = newStatus;
+    await barbershop.save();
+
+    res.json({ 
+      message: `Barbearia ${newStatus === "active" ? "ativada" : "desativada"} com sucesso.`,
+      barbershop: {
+        _id: barbershop._id,
+        name: barbershop.name,
+        accountStatus: barbershop.accountStatus,
+      }
+    });
+  } catch (error) {
+    console.error("Erro ao alterar status da barbearia:", error);
+    res.status(500).json({ error: "Erro ao alterar status da barbearia." });
   }
 });
 

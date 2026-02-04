@@ -8,6 +8,7 @@ const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL || process.env.BACKEND_URL || "https://api.barbeariagendamento.com.br";
 const BACKEND_URL = process.env.BACKEND_URL || "https://api.barbeariagendamento.com.br";
 
+console.log(`[WhatsApp] Inicializando serviço com URL: ${EVOLUTION_API_URL}`);
 const api = axios.create({
   baseURL: EVOLUTION_API_URL,
   headers: {
@@ -63,18 +64,21 @@ export async function createInstance(barbershopId) {
       // Ignora erro se a instância não existir
     }
 
-    const createResponse = await api.post("/instance/create", {
+    const payload = {
       instanceName,
       integration: "WHATSAPP-BAILEYS",
       qrcode: true,
-      // Configurações minimalistas para evitar conflitos
       rejectCall: false,
       groupsIgnore: true,
       alwaysOnline: false,
       readMessages: false,
       readStatus: false,
       syncFullHistory: false,
-    });
+    };
+
+    console.log(`[WhatsApp] Enviando payload de criação para ${instanceName}:`, JSON.stringify(payload, null, 2));
+
+    const createResponse = await api.post("/instance/create", payload);
 
     // Verifica se o QR code veio na resposta de criação
     let qrcode = null;

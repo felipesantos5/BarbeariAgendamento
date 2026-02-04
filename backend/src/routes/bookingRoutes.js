@@ -359,6 +359,10 @@ router.put(
       }
 
       // 4. Atualizar o status e salvar
+      if (status === "completed" && ["pending", "no-payment"].includes(booking.paymentStatus)) {
+        booking.paymentStatus = "approved";
+      }
+
       booking.status = status;
       await booking.save();
 

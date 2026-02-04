@@ -114,9 +114,20 @@ const updateExpiredBookings = async () => {
       status: { $in: ["booked", "confirmed"] },
     };
 
-    const update = {
-      $set: { status: "completed" },
-    };
+    const update = [
+      {
+        $set: {
+          status: "completed",
+          paymentStatus: {
+            $cond: {
+              if: { $in: ["$paymentStatus", ["pending", "no-payment"]] },
+              then: "approved",
+              else: "$paymentStatus",
+            },
+          },
+        },
+      },
+    ];
 
     const result = await Booking.updateMany(filter, update);
     if (result.modifiedCount > 0) {

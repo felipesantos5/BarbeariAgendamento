@@ -36,6 +36,7 @@ import authSuperAdminRoutes from "./routes/authSuperAdminRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
 import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
 import whatsappRoutes from "./routes/whatsappRoutes.js";
+import billingRoutes from "./routes/billingRoutes.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
@@ -133,6 +134,7 @@ app.use('/api/leads', leadRoutes);
 // Super Admin
 app.use("/api/auth/superadmin", authSuperAdminRoutes);
 app.use("/api/superadmin", protectSuperAdmin, superAdminRoutes);
+app.use("/api/superadmin/billing", protectSuperAdmin, billingRoutes);
 
 // --- Global Error Handler ---
 // Captura qualquer erro nao tratado nas rotas e retorna 500 limpo
