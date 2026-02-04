@@ -31,14 +31,12 @@ function addClient(barbershopId, client) {
     } catch (err) {
       // Ignore errors when closing old connection
     }
-    console.log(`[SSE] Limite atingido. Conexão mais antiga removida para barbershop ${barbershopId}`);
   }
 
   barbershopClients.push(client);
 
   // Set timeout for this connection
   const timeout = setTimeout(() => {
-    console.log(`[SSE] Timeout de conexão para barbershop ${barbershopId}`);
     removeClient(barbershopId, client);
     try {
       client.end();

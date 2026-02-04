@@ -26,8 +26,10 @@ router.post("/webhook/:instanceName", async (req, res) => {
   try {
     const { instanceName } = req.params;
     const event = req.body;
+    const eventType = event.event;
 
-    console.log(`[WhatsApp Webhook] Evento recebido para ${instanceName}:`, JSON.stringify(event, null, 2));
+    // Log apenas do tipo de evento para não poluir
+    console.log(`[WhatsApp Webhook] Evento recebido: ${eventType} para ${instanceName}`);
 
     // Extrai o barbershopId do nome da instância (formato: barbershop_{id})
     const barbershopId = instanceName.replace("barbershop_", "");
@@ -62,8 +64,6 @@ async function handleConnectionUpdate(barbershop, event, barbershopId) {
   const data = event.data || event;
   const state = data.state || data.connection || data.status;
   const statusReason = data.statusReason;
-
-  console.log(`[WhatsApp Webhook] Connection Update - State: ${state}, StatusReason: ${statusReason}`);
 
   let newStatus = "disconnected";
   let connectedNumber = null;
@@ -127,8 +127,6 @@ async function handleQRCodeUpdate(barbershop, event, instanceName, barbershopId)
   const data = event.data || event;
   let qrcode = data.qrcode?.base64 || data.base64 || data.qrcode;
 
-  console.log(`[WhatsApp Webhook] QR Code Update - QR recebido: ${qrcode ? "SIM" : "NÃO"}`);
-
   if (qrcode) {
     // Formata o QR code se necessário
     if (!qrcode.startsWith("data:image")) {
@@ -142,13 +140,10 @@ async function handleQRCodeUpdate(barbershop, event, instanceName, barbershopId)
       timestamp: Date.now(),
     });
 
-    // Envia evento SSE para o frontend com o novo QR code
     sendEventToBarbershop(barbershopId, "whatsapp_qrcode", {
       qrcode,
       pairingCode: data.pairingCode || data.code,
     });
-
-    console.log(`[WhatsApp Webhook] QR Code atualizado e enviado via SSE`);
   }
 }
 
@@ -242,7 +237,7 @@ router.post("/:id/whatsapp/connect", protectAdmin, async (req, res) => {
       try {
         await deleteInstance(barbershop.whatsappConfig.instanceName);
       } catch (err) {
-        console.log("[WhatsApp] Erro ao deletar instância anterior (ignorando):", err.message);
+        // Silencioso
       }
     }
 
@@ -395,14 +390,14 @@ router.delete("/:id/whatsapp/disconnect", protectAdmin, async (req, res) => {
     try {
       await disconnectInstance(instanceName);
     } catch (err) {
-      console.log("[WhatsApp] Erro ao desconectar (ignorando):", err.message);
+      // Silencioso
     }
 
     // Deleta a instância
     try {
       await deleteInstance(instanceName);
     } catch (err) {
-      console.log("[WhatsApp] Erro ao deletar (ignorando):", err.message);
+      // Silencioso
     }
 
     // Limpa os dados no banco

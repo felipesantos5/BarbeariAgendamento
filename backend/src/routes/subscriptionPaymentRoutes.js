@@ -158,11 +158,6 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
       barbershopId: barbershop._id.toString(),
     });
 
-    // Criar preapproval no Mercado Pago
-    const notificationUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
-
-    console.log("📋 Criando PreApproval com notification_url:", notificationUrl);
-
     const preapprovalData = {
       body: {
         reason: `Plano ${plan.name} - ${barbershop.name}`,
@@ -179,13 +174,8 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
       },
     };
 
-    console.log("📤 Enviando PreApproval para Mercado Pago...");
     const result = await preapproval.create(preapprovalData);
-    console.log("✅ PreApproval criado:", {
-      id: result.id,
-      status: result.status,
-      init_point: result.init_point,
-    });
+    console.log("✅ PreApproval criado:", result.id);
 
     // Salvar ID do preapproval na subscription
     subscription.mercadoPagoPreapprovalId = result.id;
@@ -228,16 +218,7 @@ router.post("/webhook", async (req, res) => {
   let barbershopId = req.query.barbershopId || req.params.barbershopId;
 
   const logPrefix = `[WEBHOOK-SUB ${notification.type || 'unknown'}]`;
-  console.log(`\n${"=".repeat(80)}`);
-  console.log(`${logPrefix} 🔔 WEBHOOK RECEBIDO`);
-  console.log(`${logPrefix} ID: ${notification.data?.id}`);
-  console.log(`${logPrefix} Query params:`, req.query);
-  console.log(`${logPrefix} Route params:`, req.params);
-  console.log(`${logPrefix} Body:`, JSON.stringify(notification, null, 2));
-  console.log(`${logPrefix} Headers:`, {
-    "x-signature": req.headers["x-signature"] ? "presente" : "ausente",
-    "x-request-id": req.headers["x-request-id"] || "ausente",
-  });
+  console.log(`${logPrefix} 🔔 WEBHOOK RECEBIDO - ID: ${notification.data?.id}`);
 
   // Responder 200 imediatamente para o MP não reenviar
   res.sendStatus(200);
@@ -339,13 +320,6 @@ router.post("/webhook", async (req, res) => {
       const preapproval = new PreApproval(client);
       const preapprovalData = await preapproval.get({ id: dataId });
 
-      console.log(`${logPrefix} 📋 Dados do preapproval:`, JSON.stringify({
-        id: preapprovalData.id,
-        status: preapprovalData.status,
-        external_reference: preapprovalData.external_reference,
-        payer_email: preapprovalData.payer_email,
-      }, null, 2));
-
       // Tentar encontrar subscription pelo mercadoPagoPreapprovalId
       let subscription = await Subscription.findOne({
         mercadoPagoPreapprovalId: dataId,
@@ -413,13 +387,6 @@ router.post("/webhook", async (req, res) => {
       const { Payment } = await import("mercadopago");
       const payment = new Payment(client);
       const paymentData = await payment.get({ id: dataId });
-
-      console.log(`${logPrefix} 💳 Dados do pagamento:`, JSON.stringify({
-        id: paymentData.id,
-        status: paymentData.status,
-        preapproval_id: paymentData.preapproval_id,
-        transaction_amount: paymentData.transaction_amount,
-      }, null, 2));
 
       if (paymentData.status === "approved" && paymentData.preapproval_id) {
         const subscription = await Subscription.findOne({

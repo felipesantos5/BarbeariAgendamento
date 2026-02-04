@@ -34,7 +34,6 @@ export const protectAdmin = (req, res, next) => {
       next(); // Tudo certo, continua para a rota
     } catch (error) {
       // Se a verificação falhar (token inválido/expirado)
-      console.error("Erro na verificação do token:", error.name);
       // Limpa o cookie inválido (se ele veio do cookie)
       if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
         res.clearCookie(AUTH_COOKIE_NAME);
