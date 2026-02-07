@@ -158,6 +158,11 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
       barbershopId: barbershop._id.toString(),
     });
 
+    // Definir notification_url para receber webhooks do Mercado Pago
+    const notificationUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
+
+    console.log(`📋 Criando PreApproval com notification_url: ${notificationUrl}`);
+
     const preapprovalData = {
       body: {
         reason: `Plano ${plan.name} - ${barbershop.name}`,
@@ -174,6 +179,7 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
       },
     };
 
+    console.log("📤 Enviando PreApproval para Mercado Pago...");
     const result = await preapproval.create(preapprovalData);
     console.log("✅ PreApproval criado:", result.id);
 
