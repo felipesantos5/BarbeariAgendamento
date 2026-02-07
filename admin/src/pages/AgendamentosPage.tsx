@@ -428,8 +428,8 @@ export function AgendamentosPage() {
   };
 
   const handleSaveBlock = async () => {
-    if (!newBlockData.title || !newBlockData.barberId) {
-      toast.error("O motivo e o profissional são obrigatórios.");
+    if (!newBlockData.barberId) {
+      toast.error("O profissional é obrigatório.");
       return;
     }
     setIsCreatingBlock(true);
