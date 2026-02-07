@@ -549,7 +549,7 @@ export function PlansPage() {
                 <Checkbox
                   id="useBarberCommission"
                   checked={currentPlan.useBarberCommission || false}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: any) =>
                     setCurrentPlan({
                       ...currentPlan,
                       useBarberCommission: checked as boolean,

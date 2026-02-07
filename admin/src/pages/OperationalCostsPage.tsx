@@ -494,7 +494,7 @@ export function OperationalCostsPage() {
               <Checkbox
                 id="isRecurring"
                 checked={currentCost.isRecurring || false}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked: any) =>
                   setCurrentCost({
                     ...currentCost,
                     isRecurring: checked as boolean,
