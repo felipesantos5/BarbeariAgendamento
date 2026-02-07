@@ -27,6 +27,7 @@ export function translatePaymentStatus(status?: string | null): PaymentStatusInf
   const statusMap: Record<string, PaymentStatusInfo> = {
     // Status de Sucesso
     approved: { text: "Pago no App", color: "success" },
+    paid_in_store: { text: "Pago Presencial", color: "success" },
     "no-payment": { text: "Não Pago", color: "warning" },
     plan_credit: { text: "Plano", color: "success" },
 
@@ -76,6 +77,11 @@ export const getPaymentStatusInfo = (booking: PopulatedBooking) => {
     case "plan":
       return {
         text: "Pago (Online)",
+        className: "bg-green-100 text-green-800 border-green-200",
+      };
+    case "paid_in_store":
+      return {
+        text: "Pago (Presencial)",
         className: "bg-green-100 text-green-800 border-green-200",
       };
     case "pending":
