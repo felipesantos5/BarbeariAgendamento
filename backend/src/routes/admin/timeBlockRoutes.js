@@ -12,10 +12,10 @@ router.post("/", async (req, res) => {
     const { barbershopId } = req.params;
     const { title, startTime, endTime, barberId } = req.body;
 
-    if (!title || !startTime || !endTime || !barberId) {
+    if (!startTime || !endTime || !barberId) {
       return res
         .status(400)
-        .json({ error: "Todos os campos são obrigatórios." });
+        .json({ error: "Os campos de horário e profissional são obrigatórios." });
     }
 
     const startBlock = new Date(startTime);

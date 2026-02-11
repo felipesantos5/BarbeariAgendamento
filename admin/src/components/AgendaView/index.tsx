@@ -14,7 +14,7 @@ interface AgendaEvent {
 
 const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
   const isCanceled = event.resource?.status === "canceled";
-  const isPaid = event.resource?.paymentStatus === "approved";
+  const isPaid = event.resource?.paymentStatus === "approved" || event.resource?.paymentStatus === "paid_in_store";
   const containerClasses = "relative w-full h-full p-1 text-xs overflow-hidden";
 
   if (event.resource?.type === "block") {

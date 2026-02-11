@@ -428,8 +428,8 @@ export function AgendamentosPage() {
   };
 
   const handleSaveBlock = async () => {
-    if (!newBlockData.title || !newBlockData.barberId) {
-      toast.error("O motivo e o profissional são obrigatórios.");
+    if (!newBlockData.barberId) {
+      toast.error("O profissional é obrigatório.");
       return;
     }
     setIsCreatingBlock(true);
@@ -724,7 +724,7 @@ export function AgendamentosPage() {
                   const loyaltyData = selectedBooking.customer?.loyaltyData?.find((data: any) => data.barbershop === barbershopId);
                   const hasReward = loyaltyData && loyaltyData.rewards > 0;
 
-                  const isPaid = selectedBooking.paymentStatus === "approved";
+                  const isPaid = selectedBooking.paymentStatus === "approved" || selectedBooking.paymentStatus === "paid_in_store";
                   const isRedeemed = selectedBooking.paymentStatus === "redeemed"; // Assumindo que a API retorne isso
                   const isCanceled = selectedBooking.status === "canceled";
 

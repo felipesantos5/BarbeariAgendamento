@@ -300,6 +300,11 @@ router.put(
         month: "2-digit",
       }).format(bookingDate);
 
+      const formattedTime = new Intl.DateTimeFormat("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(bookingDate);
+
       if (status === "canceled") {
         // Devolve créditos se o agendamento usou crédito de plano
         if (booking.subscriptionUsed && booking.paymentStatus === "plan_credit") {
@@ -314,7 +319,7 @@ router.put(
           }
         }
 
-        const message = `Olá ${booking.customer.name},\nInformamos que seu agendamento foi cancelado na ${barbershop.name} para o dia ${formattedDate}.`;
+        const message = `Olá ${booking.customer.name},\nInformamos que seu agendamento das ${formattedTime} do dia ${formattedDate} foi cancelado na ${barbershop.name}.`;
 
         sendWhatsAppMessage(barbershopId, booking.customer.phone, message);
       }
@@ -359,8 +364,13 @@ router.put(
       }
 
       // 4. Atualizar o status e salvar
-      if (status === "completed" && ["pending", "no-payment"].includes(booking.paymentStatus)) {
-        booking.paymentStatus = "approved";
+      if (status === "completed") {
+        if (booking.paymentStatus === "pending" && barbershop.paymentsEnabled && !barbershop.requireOnlinePayment) {
+          // Checkout habilitado, pagamento não obrigatório, cliente não pagou online → pago presencial
+          booking.paymentStatus = "paid_in_store";
+        } else if (["pending", "no-payment"].includes(booking.paymentStatus)) {
+          booking.paymentStatus = "approved";
+        }
       }
 
       booking.status = status;
@@ -765,7 +775,12 @@ router.delete("/:bookingId", async (req, res) => {
       month: "2-digit",
     }).format(bookingDate);
 
-    const message = `Olá ${booking.customer.name},\nInformamos que seu agendamento foi cancelado na ${barbershop.name} para o dia ${formattedDate} foi cancelado.`;
+    const formattedTime = new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(bookingDate);
+
+    const message = `Olá ${booking.customer.name},\nInformamos que seu agendamento das ${formattedTime} do dia ${formattedDate} foi cancelado na ${barbershop.name}.`;
 
     sendWhatsAppMessage(barbershopId, booking.customer.phone, message);
 
