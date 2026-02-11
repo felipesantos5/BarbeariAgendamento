@@ -852,8 +852,9 @@ export function MyBookingsPage() {
                     const response = await apiClient.put("/api/auth/customer/update-profile", profileData);
                     updateCustomerData(response.data.customer);
                     toast.success("Perfil atualizado com sucesso!");
-                  } catch (error) {
-                    toast.error("Erro ao atualizar perfil.");
+                  } catch (error: any) {
+                    const msg = error.response?.data?.error || "Erro ao atualizar perfil.";
+                    toast.error(msg);
                   } finally {
                     setIsUpdatingProfile(false);
                   }

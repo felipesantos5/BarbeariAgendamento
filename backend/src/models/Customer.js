@@ -40,6 +40,8 @@ const customerSchema = new mongoose.Schema(
       type: String,
       trim: true,
       lowercase: true,
+      unique: true,
+      sparse: true, // Permite que múltiplos clientes sem email existam sem conflito
     },
     birthDate: {
       type: Date,

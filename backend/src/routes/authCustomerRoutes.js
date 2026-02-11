@@ -141,7 +141,24 @@ router.put("/update-profile", protectCustomer, async (req, res) => {
       return res.status(404).json({ error: "Cliente não encontrado." });
     }
 
-    if (email !== undefined) customer.email = email.trim().toLowerCase();
+    if (email !== undefined) {
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Verifica se o email já está em uso por outro cliente
+      if (normalizedEmail !== "") {
+        const existingCustomer = await Customer.findOne({ 
+          email: normalizedEmail,
+          _id: { $ne: req.customer._id } 
+        });
+
+        if (existingCustomer) {
+          return res.status(400).json({ error: "Este e-mail já está sendo usado por outra conta." });
+        }
+      }
+      
+      customer.email = normalizedEmail;
+    }
+
     if (name !== undefined) customer.name = name.trim();
     if (birthDate !== undefined) customer.birthDate = birthDate;
 
