@@ -36,8 +36,16 @@ const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
         <div className="block truncate opacity-80">{event.resource.service?.name}</div>
       </div>
 
-      {isCanceled && <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/80 transform -rotate-6" />}
-      {isCanceled && <div className="absolute top-1/2 right-0 w-full h-0.5 bg-red-500/80 transform rotate-6" />}
+      {isCanceled && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <line x1="0" y1="0" x2="100" y2="100" stroke="rgba(239, 68, 68, 0.8)" strokeWidth="1" />
+          <line x1="100" y1="0" x2="0" y2="100" stroke="rgba(239, 68, 68, 0.8)" strokeWidth="1" />
+        </svg>
+      )}
 
       {isPaid && !isCanceled && (
         <CheckCircle className="absolute top-1 right-1 h-6 w-6 text-white" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.7))" }} />
@@ -175,7 +183,8 @@ export function AgendaView({ events, onSelectEvent, onSelectSlot, currentDate, o
           }
 
           if (event.resource?.status === "canceled") {
-            style.textDecoration = "line-through";
+            style.opacity = 0.8;
+            style.filter = "grayscale(0.5)";
           }
 
           return { style };

@@ -12,13 +12,22 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import {
   CalendarIcon,
   Clock,
   DollarSign,
   UserCheck,
   UserPlus,
-  Loader2,
+  Users,
   ClipboardList,
   ClipboardCheck,
   ClipboardX,
@@ -31,6 +40,7 @@ import {
   ShoppingCart,
   TrendingUp,
 } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -173,7 +183,19 @@ const CHART_COLORS = [
   "#06b6d4", // cyan-500
   "#ec4899", // pink-500
   "#84cc16", // lime-500
+  "#17becf", // cyan-500
 ];
+
+const professionalChartConfig = {
+  liquido: {
+    label: "Faturamento",
+    color: "#3b82f6", // Azul do Faturamento por Dia
+  },
+  comissao: {
+    label: "Comissão",
+    color: "#10b981", // Verde do Faturamento por Horário
+  },
+} satisfies ChartConfig;
 
 // --- Componente Principal ---
 export default function DashboardMetricsPage() {
@@ -302,118 +324,102 @@ export default function DashboardMetricsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex justify-center items-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Carregando métricas...</span>
-        </div>
-      )}
-
-      {/* Error */}
+      {/* Erro */}
       {error && !isLoading && (
-        <Card className="border-destructive bg-destructive/10">
+        <Card className="border-destructive bg-destructive/10 mb-6">
           <CardHeader>
             <CardTitle className="text-destructive">Erro ao Carregar</CardTitle>
             <CardDescription className="text-destructive">Período: {formatActivePeriodDisplay()}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-destructive">{error}</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={() => {
-                /* ... (lógica de refetch) ... */
-              }}
-            >
-              Tentar Novamente
-            </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* ✅ SEÇÃO DE MÉTRICAS ATUALIZADA (3/4) */}
-      {data && !isLoading && !error && (
-        <>
-          {/* Card de Resumo Financeiro (Bruto vs Líquido) */}
-          <Card className="gap-4">
-            <CardHeader className="flex flex-row justify-between">
-              <div className="flex flex-col">
-                <CardTitle>Resumo Financeiro</CardTitle>
-                {/* <CardDescription>O desempenho financeiro consolidado da barbearia no período.</CardDescription> */}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Select
-                  value={selectedMonth}
-                  onValueChange={(value) => {
-                    setSelectedMonth(value);
-                    setFilterMode("month");
-                  }}
+      {/* Card Principal: Sempre visível, com Header e Filtros fixos */}
+      <Card className="gap-4">
+        <CardHeader className="flex flex-col xs:flex-row xs:justify-between sm:items-center gap-4">
+          <div className="flex flex-col">
+            <CardTitle>Resumo Financeiro</CardTitle>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select
+              value={selectedMonth}
+              onValueChange={(value) => {
+                setSelectedMonth(value);
+                setFilterMode("month");
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthNames.map((name, index) => (
+                  <SelectItem key={index} value={(index + 1).toString()}>
+                    {name}
+                  </SelectItem>
+                ))}
+                <SelectItem value="0">Ano Completo</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedYear}
+              onValueChange={(value) => {
+                setSelectedYear(value);
+                setFilterMode("month");
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-[120px]">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+                <SelectItem value="all">Todos os Anos</SelectItem>
+              </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date-range-popover"
+                  variant={"outline"}
+                  className={`w-full sm:w-auto justify-start text-left font-normal ${filterMode === "range" ? "ring-2 ring-primary ring-offset-2" : ""
+                    }`}
+                  onClick={() => setFilterMode("range")}
                 >
-                  <SelectTrigger className="w-full sm:w-[150px]">
-                    <SelectValue placeholder="Mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {monthNames.map((name, index) => (
-                      <SelectItem key={index} value={(index + 1).toString()}>
-                        {name}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="0">Ano Completo</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={selectedYear}
-                  onValueChange={(value) => {
-                    setSelectedYear(value);
-                    setFilterMode("month");
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {filterMode === "range" ? formatDateRangeDisplay(dateRange) : "Intervalo Específico"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from ?? new Date()}
+                  selected={dateRange}
+                  onSelect={(range) => {
+                    setDateRange(range);
+                    if (range?.from) {
+                      setFilterMode("range");
+                    }
                   }}
-                >
-                  <SelectTrigger className="w-full sm:w-[120px]">
-                    <SelectValue placeholder="Ano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableYears.map((year) => (
-                      <SelectItem key={year} value={year}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="all">Todos os Anos</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="date-range-popover"
-                      variant={"outline"}
-                      className={`w-full sm:w-auto justify-start text-left font-normal ${filterMode === "range" ? "ring-2 ring-primary ring-offset-2" : ""
-                        }`}
-                      onClick={() => setFilterMode("range")}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {filterMode === "range" ? formatDateRangeDisplay(dateRange) : "Intervalo Específico"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from ?? new Date()}
-                      selected={dateRange}
-                      onSelect={(range) => {
-                        setDateRange(range);
-                        if (range?.from) {
-                          setFilterMode("range");
-                        }
-                      }}
-                      numberOfMonths={2}
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardHeader>
-            <CardContent>
+                  numberOfMonths={2}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <DashboardContentSkeleton />
+          ) : data ? (
+            <>
+              {/* Card de Resumo Financeiro content */}
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
                 <MetricCard
                   title="Faturamento Bruto"
@@ -424,7 +430,7 @@ export default function DashboardMetricsPage() {
                   className="justify-around"
                 />
                 <MetricCard
-                  title="Despesas de Comissões"
+                  title="Comissões"
                   value={PriceFormater(data.financialOverview.totalCommissionsPaid)}
                   icon={BadgePercent}
                   description="Comissões (Serviços, Planos, Produtos)"
@@ -449,86 +455,26 @@ export default function DashboardMetricsPage() {
                 />
               </div>
 
-              {/* <Separator className="my-6" /> */}
-
-              {/* Detalhes da Receita Bruta 
-              {/*<div>
-                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                  <TrendingUp size={20} />
-                  Detalhes da Receita Bruta
-                </h3>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <MetricCard
-                    title="Receita de Serviços"
-                    value={PriceFormater(data.financialOverview.revenueFromServices)}
-                    icon={Scissors}
-                    description={`${data.generalMetrics.completedBookings} agendamentos concluídos`}
-                  />
-                  <MetricCard
-                    title="Receita de Planos"
-                    value={PriceFormater(data.financialOverview.revenueFromPlans)}
-                    icon={Package}
-                    description={`${data.generalMetrics.totalPlansSold} planos vendidos`}
-                  />
-                  <MetricCard
-                    title="Receita de Produtos"
-                    value={PriceFormater(data.financialOverview.revenueFromProducts)}
-                    icon={ShoppingCart}
-                    description={`${data.generalMetrics.totalProductsSold} produtos vendidos`}
-                  />
-                </div>
-              </div>*/}
-
-              {/* <Separator className="my-6" /> */}
-
-              {/* Detalhes das Despesas (Comissões) */}
-              {/* <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                  <ArrowDownWideNarrow size={20} />
-                  Detalhes das Despesas (Comissões)
-                </h3>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <MetricCard
-                    title="Comissão (Serviços)"
-                    value={PriceFormater(data.financialOverview.commissionFromServices)}
-                    icon={Scissors}
-                    description="Comissão sobre agendamentos"
-                  />
-                  <MetricCard
-                    title="Comissão (Planos)"
-                    value={PriceFormater(data.financialOverview.commissionFromPlans)}
-                    icon={Package}
-                    description="Comissão sobre venda de planos"
-                  />
-                  <MetricCard
-                    title="Comissão (Produtos)"
-                    value={PriceFormater(data.financialOverview.commissionFromProducts)}
-                    icon={ShoppingCart}
-                    description="Comissão sobre venda de produtos"
-                  />
-                </div>
-              </div> */}
-
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="lg:col-span-2">
+              <div className="grid gap-6 grid-cols-1 md:grid-cols-2 min-[1375px]:grid-cols-7! ">
+                {/* Faturamento por Dia - 80% */}
+                <Card className="col-span-1 min-[1375px]:col-span-5">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 text-primary" />
                       <CardTitle>Faturamento por Dia</CardTitle>
                     </div>
-
                   </CardHeader>
-                  <CardContent className="p-0!">
+                  <CardContent className="!p-0">
                     {data.dailyRevenue.length > 0 ? (
                       <div className="h-[350px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" maxHeight={350}>
                           <AreaChart
                             data={data.dailyRevenue.map((item) => ({
                               ...item,
                               dateFormatted: format(parseISO(item.date), "dd/MM", { locale: ptBR }),
                               dateComplete: format(parseISO(item.date), "dd 'de' MMMM", { locale: ptBR }),
                             }))}
-                            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                            margin={{ top: 10, right: 20, left: 10, bottom: 0 }}
                           >
                             <defs>
                               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -548,20 +494,20 @@ export default function DashboardMetricsPage() {
                               tick={{ fontSize: 12 }}
                               tickLine={false}
                               axisLine={false}
-                              width={80}
+                              width={65}
                             />
                             <Tooltip
                               content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
+                                  const d = payload[0].payload;
                                   return (
                                     <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                      <p className="font-medium">{data.dateComplete}</p>
+                                      <p className="font-medium">{d.dateComplete}</p>
                                       <p className="text-sm text-blue-600">
-                                        Receita: {PriceFormater(data.revenue)}
+                                        Receita: {PriceFormater(d.revenue)}
                                       </p>
                                       <p className="text-sm text-muted-foreground">
-                                        {data.bookings} atendimento{data.bookings !== 1 ? "s" : ""}
+                                        {d.bookings} atendimento{d.bookings !== 1 ? "s" : ""}
                                       </p>
                                     </div>
                                   );
@@ -587,8 +533,8 @@ export default function DashboardMetricsPage() {
                   </CardContent>
                 </Card>
 
-                {/* Gráfico de Pizza - Serviços */}
-                <Card>
+                {/* Gráfico de Pizza - Serviços - 20% */}
+                <Card className="col-span-1 min-[1375px]:col-span-2">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <PieChart className="h-5 w-5 text-primary" />
@@ -624,15 +570,15 @@ export default function DashboardMetricsPage() {
                             <Tooltip
                               content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
+                                  const d = payload[0].payload;
                                   return (
                                     <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                      <p className="font-medium">{data.name}</p>
-                                      <p className="text-sm" style={{ color: data.fill }}>
-                                        {PriceFormater(data.value)}
+                                      <p className="font-medium">{d.name}</p>
+                                      <p className="text-sm" style={{ color: d.fill }}>
+                                        {PriceFormater(d.value)}
                                       </p>
                                       <p className="text-sm text-muted-foreground">
-                                        {data.count} atendimento{data.count !== 1 ? "s" : ""}
+                                        {d.count} atendimento{d.count !== 1 ? "s" : ""}
                                       </p>
                                     </div>
                                   );
@@ -655,9 +601,10 @@ export default function DashboardMetricsPage() {
                     )}
                   </CardContent>
                 </Card>
+              </div>
 
-                {/* Gráfico de Barras - Horários mais Rentáveis */}
-                <Card>
+              <div className="grid gap-6 lg:grid-cols-2 mt-6">
+                <Card className="lg:col-span-1">
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Clock className="h-5 w-5 text-primary" />
@@ -695,15 +642,15 @@ export default function DashboardMetricsPage() {
                             <Tooltip
                               content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
-                                  const data = payload[0].payload;
+                                  const d = payload[0].payload;
                                   return (
                                     <div className="rounded-lg border bg-background p-3 shadow-lg">
-                                      <p className="font-medium">{data.hourFormatted}</p>
+                                      <p className="font-medium">{d.hourFormatted}</p>
                                       <p className="text-sm text-emerald-600">
-                                        Receita: {PriceFormater(data.revenue)}
+                                        Receita: {PriceFormater(d.revenue)}
                                       </p>
                                       <p className="text-sm text-muted-foreground">
-                                        {data.bookings} atendimento{data.bookings !== 1 ? "s" : ""}
+                                        {d.bookings} atendimento{d.bookings !== 1 ? "s" : ""}
                                       </p>
                                     </div>
                                   );
@@ -722,6 +669,103 @@ export default function DashboardMetricsPage() {
                     ) : (
                       <div className="flex h-[300px] items-center justify-center text-muted-foreground">
                         Nenhum dado de horário para este período.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Gráfico de Barras - Profissionais */}
+                <Card className="lg:col-span-1">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-primary" />
+                      <CardTitle>Faturamento por Profissional</CardTitle>
+                    </div>
+                    <CardDescription>
+                      Comparativo de Receita vs Comissão por barbeiro no período.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {data.barberPerformance.length > 0 ? (
+                      <ChartContainer config={professionalChartConfig} className="h-[300px] w-full">
+                        <BarChart
+                          accessibilityLayer
+                          data={data.barberPerformance.map((barber) => {
+                            const totalRevenue = barber.totalServiceRevenue + barber.totalPlanRevenue + barber.totalProductRevenue;
+                            const commission = barber.totalCommission;
+                            const net = totalRevenue - commission;
+                            return {
+                              name: barber.name,
+                              total: totalRevenue,
+                              comissao: commission,
+                              liquido: net > 0 ? net : 0,
+                            };
+                          })}
+                        >
+                          <CartesianGrid vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            tickMargin={10}
+                            axisLine={false}
+                            tickFormatter={(value) => (value.length > 10 ? `${value.slice(0, 8)}...` : value)}
+                          />
+                          <YAxis
+                            tickFormatter={(value) => `R$${value}`}
+                            tickLine={false}
+                            axisLine={false}
+                            fontSize={12}
+                          />
+                          <ChartTooltip
+                            content={
+                              <ChartTooltipContent
+                                hideLabel
+                                className="w-[180px]"
+                                formatter={(value, name) => (
+                                  <>
+                                    <div
+                                      className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-[--color-helper]"
+                                      style={
+                                        {
+                                          "--color-helper": `var(--color-${name})`,
+                                        } as React.CSSProperties
+                                      }
+                                    />
+                                    <div className="flex flex-1 justify-between leading-none">
+                                      <div className="grid gap-1.5">
+                                        <span className="text-muted-foreground">
+                                          {professionalChartConfig[name as keyof typeof professionalChartConfig]?.label || name}
+                                        </span>
+                                      </div>
+                                      <span className="font-mono font-medium tabular-nums text-foreground">
+                                        {PriceFormater(value as number)}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                              />
+                            }
+                          />
+                          <ChartLegend content={<ChartLegendContent />} />
+                          <Bar
+                            dataKey="liquido"
+                            name="liquido"
+                            stackId="a"
+                            fill="var(--color-liquido)"
+                            radius={[0, 0, 4, 4]}
+                          />
+                          <Bar
+                            dataKey="comissao"
+                            name="comissao"
+                            stackId="a"
+                            fill="var(--color-comissao)"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                        Nenhum dado de profissionais para este período.
                       </div>
                     )}
                   </CardContent>
@@ -774,7 +818,7 @@ export default function DashboardMetricsPage() {
                 </div>
               </div>
 
-              {/* Grupo de Planos e Assinaturas - Esconde se não houver dados */}
+              {/* Grupo de Planos e Assinaturas */}
               {(data.planStats.activePlans > 0 || data.planStats.newPlansSold > 0 || data.planStats.bookingsWithPlans > 0) && (
                 <>
                   <Separator className="my-6" />
@@ -823,7 +867,7 @@ export default function DashboardMetricsPage() {
                 </>
               )}
 
-              {/* Grupo de Movimentação de Estoque - Esconde se não houver dados */}
+              {/* Grupo de Movimentação de Estoque */}
               {(data.stockMovement.totalProductsSold > 0 || data.stockMovement.totalProductsPurchased > 0) && (
                 <>
                   <Separator className="my-6" />
@@ -865,106 +909,131 @@ export default function DashboardMetricsPage() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
 
-          {/* ===== SEÇÃO DE GRÁFICOS ===== */}
-
-
-          {/* ✅ TABELA DE BARBEIROS (4/4) - ATUALIZADA CONFORME SOLICITADO */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Desempenho por Profissional</CardTitle>
-              <CardDescription>Resultados individuais (serviços, planos e produtos) de cada profissional no período.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Profissional</TableHead>
-                    <TableHead className="text-right text-green-600">Receita (Serviços)</TableHead>
-                    <TableHead className="text-right text-green-600">Receita (Planos)</TableHead>
-                    <TableHead className="text-right text-green-600">Receita (Produtos)</TableHead>
-                    <TableHead className="text-right text-purple-600">Comissão Total</TableHead>
-                    <TableHead className="text-center">Atendimentos</TableHead>
-                    <TableHead className="text-center">Vendas (Planos)</TableHead>
-                    <TableHead className="text-center">Vendas (Prod.)</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.barberPerformance.length > 0 ? (
-                    data.barberPerformance.map((barber) => (
-                      <TableRow key={barber._id}>
-                        {/* Nome */}
-                        <TableCell className="font-medium">
-                          {barber.name}
-                          <span className="ml-2 text-xs text-muted-foreground">({barber.commissionRate}%)</span>
-                        </TableCell>
-
-                        {/* Receitas (Valores cheios) */}
-                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalServiceRevenue)}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalPlanRevenue)}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalProductRevenue)}</TableCell>
-
-                        {/* Comissão Total */}
-                        <TableCell className="text-right font-bold text-purple-700">{PriceFormater(barber.totalCommission)}</TableCell>
-
-                        {/* Contagens (Quantidades) */}
-                        <TableCell className="text-center">{barber.completedBookings}</TableCell>
-                        <TableCell className="text-center">{barber.totalPlansSold}</TableCell>
-                        <TableCell className="text-center">{barber.totalProductsSold}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                        Nenhum dado de profissional para este período.
+      {/* Tabela de Barbeiros Skeleton ou Conteúdo */}
+      {isLoading ? (
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-64 mb-2" />
+            <Skeleton className="h-4 w-96" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : data ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Desempenho por Profissional</CardTitle>
+            <CardDescription>Resultados individuais (serviços, planos e produtos) de cada profissional no período.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Profissional</TableHead>
+                  <TableHead className="text-right text-green-600">Receita (Serviços)</TableHead>
+                  <TableHead className="text-right text-green-600">Receita (Planos)</TableHead>
+                  <TableHead className="text-right text-green-600">Receita (Produtos)</TableHead>
+                  <TableHead className="text-right text-purple-600">Comissão Total</TableHead>
+                  <TableHead className="text-center">Atendimentos</TableHead>
+                  <TableHead className="text-center">Vendas (Planos)</TableHead>
+                  <TableHead className="text-center">Vendas (Prod.)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.barberPerformance.length > 0 ? (
+                  data.barberPerformance.map((barber) => (
+                    <TableRow key={barber._id}>
+                      <TableCell className="font-medium">
+                        {barber.name}
+                        <span className="ml-2 text-xs text-muted-foreground">({barber.commissionRate}%)</span>
                       </TableCell>
+                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalServiceRevenue)}</TableCell>
+                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalPlanRevenue)}</TableCell>
+                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalProductRevenue)}</TableCell>
+                      <TableCell className="text-right font-bold text-purple-700">{PriceFormater(barber.totalCommission)}</TableCell>
+                      <TableCell className="text-center">{barber.completedBookings}</TableCell>
+                      <TableCell className="text-center">{barber.totalPlansSold}</TableCell>
+                      <TableCell className="text-center">{barber.totalProductsSold}</TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Desempenho dos Serviços */}
-          {/* <Card>
-            <CardHeader>
-              <CardTitle>Serviços Mais Populares</CardTitle>
-              <CardDescription>Receita e quantidade por serviço no período.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
+                  ))
+                ) : (
                   <TableRow>
-                    <TableHead>Serviço</TableHead>
-                    <TableHead className="text-center">Quantidade</TableHead>
-                    <TableHead className="text-right">Receita Gerada</TableHead>
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                      Nenhum dado de profissional para este período.
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.servicePerformance.length > 0 ? (
-                    data.servicePerformance.map((service, index) => (
-                      <TableRow key={service.serviceId || `removed-${index}`}>
-                        <TableCell className="font-medium">{service.name || "Serviço Removido"}</TableCell>
-                        <TableCell className="text-center">{service.count}</TableCell>
-                        <TableCell className="text-right font-semibold">{PriceFormater(service.totalRevenue)}</TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        Nenhum dado de serviço para este período.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card> */}
-        </>
-      )}
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
+  );
+}
+
+// --- Componente Skeleton (para evitar layout shift) ---
+function DashboardContentSkeleton() {
+  return (
+    <>
+      {/* Top Metric Cards */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} className="max-h-[145px]">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-4 rounded-full" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-32 mb-2" />
+              <Skeleton className="h-3 w-40" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Row 1: Charts (80/20) */}
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 min-[1375px]:grid-cols-7 mb-6">
+        <Card className="lg:col-span-1 min-[1375px]:col-span-5">
+          <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
+          <CardContent><Skeleton className="h-[350px] w-full" /></CardContent>
+        </Card>
+        <Card className="lg:col-span-1 min-[1375px]:col-span-2">
+          <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
+          <CardContent><Skeleton className="h-[300px] w-full" /></CardContent>
+        </Card>
+      </div>
+
+      {/* Row 2: Charts (50/50) */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {[1, 2].map((i) => (
+          <Card key={i}>
+            <CardHeader><Skeleton className="h-6 w-40" /></CardHeader>
+            <CardContent><Skeleton className="h-[300px] w-full" /></CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Other bottom sections */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-6">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Card key={i}>
+            <CardHeader><Skeleton className="h-4 w-24" /></CardHeader>
+            <CardContent><Skeleton className="h-20 w-full" /></CardContent>
+          </Card>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -980,7 +1049,7 @@ interface MetricCardProps {
 
 function MetricCard({ title, value, icon: Icon, description, className, valueClassName }: MetricCardProps) {
   return (
-    <Card className={className}>
+    <Card className={`${className || ""}, max-h-[150px]`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />

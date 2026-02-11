@@ -15,6 +15,8 @@ const DISCORD_LOGS_WEBHOOK_URL = process.env.DISCORD_LOGS_WEBHOOK_URL;
 
 
 const BRAZIL_TZ = "America/Sao_Paulo";
+const ENABLE_AUTOMATIC_MESSAGES = process.env.ENABLE_AUTOMATIC_MESSAGES === "true" || process.env.NODE_ENV === "production";
+
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -247,7 +249,11 @@ cronTasks.push(
   cron.schedule(
     "0 8 * * *",
     () => {
-      sendDailyReminders(8);
+      if (ENABLE_AUTOMATIC_MESSAGES) {
+        sendDailyReminders(8);
+      } else {
+        console.log("[CRON] Envio de lembretes (8h) ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
+      }
     },
     {
       scheduled: true,
@@ -260,7 +266,11 @@ cronTasks.push(
   cron.schedule(
     "0 11 * * 2",
     () => {
-      sendAutomatedReturnReminders();
+      if (ENABLE_AUTOMATIC_MESSAGES) {
+        sendAutomatedReturnReminders();
+      } else {
+        console.log("[CRON] Envio de lembretes de retorno ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
+      }
     },
     {
       scheduled: true,
@@ -273,7 +283,11 @@ cronTasks.push(
   cron.schedule(
     "0 13 * * *",
     () => {
-      sendDailyReminders(13);
+      if (ENABLE_AUTOMATIC_MESSAGES) {
+        sendDailyReminders(13);
+      } else {
+        console.log("[CRON] Envio de lembretes (13h) ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
+      }
     },
     {
       scheduled: true,
@@ -299,7 +313,9 @@ cronTasks.push(
   cron.schedule(
     "0 22 * * *",
     () => {
-      sendDailyStatsSummary();
+      if (ENABLE_AUTOMATIC_MESSAGES) {
+        sendDailyStatsSummary();
+      }
     },
     {
       scheduled: true,

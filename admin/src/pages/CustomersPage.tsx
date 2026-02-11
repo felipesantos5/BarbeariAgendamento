@@ -500,7 +500,13 @@ export function CustomersPage() {
             {formatDateTime(lastBookingTime)}
           </Badge>
           <span className={`text-xs ${daysAgo <= 7 ? "text-green-600 font-medium" : "text-muted-foreground"}`}>
-            {daysAgo === 0 ? "Hoje ⭐" : daysAgo === 1 ? "Há 1 dia" : `Há ${daysAgo} dias`}
+            {daysAgo < 0
+              ? `Em ${Math.abs(daysAgo)} dia${Math.abs(daysAgo) !== 1 ? "s" : ""}`
+              : daysAgo === 0
+                ? "Hoje ⭐"
+                : daysAgo === 1
+                  ? "Há 1 dia"
+                  : `Há ${daysAgo} dias`}
           </span>
         </div>
       );
@@ -509,14 +515,6 @@ export function CustomersPage() {
     }
   };
 
-  if (isLoading && customers.length === 0) {
-    return (
-      <div className="flex justify-center items-center p-10">
-        <Loader2 className="animate-spin h-8 w-8" />
-        <span className="ml-2">Carregando clientes...</span>
-      </div>
-    );
-  }
 
   // --- Renderização ---
   return (

@@ -369,6 +369,7 @@ export function BarberPage() {
               <TableHead className="w-[300px]">Barbeiro</TableHead>
               <TableHead className="text-left">Disponibilidade</TableHead>
               <TableHead className="text-left">Pausa</TableHead>
+              <TableHead className="text-center">Comissão</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -403,6 +404,9 @@ export function BarberPage() {
                     <span className="text-muted-foreground">Não definida</span>
                   )}
                 </TableCell>
+                <TableCell className="text-xs font-medium text-blue-600 text-center">
+                  {barber.commission || 0}%
+                </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button
                     variant="outline"
@@ -430,7 +434,7 @@ export function BarberPage() {
             ))}
             {isMobile && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center pt-4 pb-0">
+                <TableCell colSpan={5} className="text-center pt-4 pb-0">
                   <Button onClick={openAddDialog}>Adicionar</Button>
                 </TableCell>
               </TableRow>

@@ -36,6 +36,7 @@ interface Booking {
     name: string;
     phone?: string;
     whatsapp?: string;
+    loyaltyData?: any[];
   };
   barber: {
     _id: string;
@@ -49,6 +50,8 @@ interface Booking {
   };
   time: string;
   status: string;
+  paymentStatus?: string;
+  createdAt?: string;
 }
 
 interface PopulatedBooking {
@@ -56,12 +59,14 @@ interface PopulatedBooking {
   time: string; // Vem como string no formato ISO da API
   status: "booked" | "confirmed" | "completed" | "canceled" | "pending_payment" | "payment_expired";
   review?: string; // ID da avaliação, se houver
+  paymentStatus?: string;
 
   // Campos que foram populados e podem ser nulos se o item original foi deletado
   customer: {
     _id: string;
     name: string;
     phone: string;
+    loyaltyData?: any[];
   } | null;
 
   barber: {
@@ -154,21 +159,15 @@ export function AgendamentosPage() {
     if (!barbershopId) return;
 
     fetchPageData();
-  }, []);
+  }, [barbershopId]);
 
   useEffect(() => {
     if (!barbershopId) return;
-
-    // Não precisamos mais ler o token do localStorage para a conexão SSE
-    // O navegador cuidará de enviar o cookie 'adminAuthToken' automaticamente
-    // se ele estiver presente para o domínio do backend.
 
     // 1. URL base do SSE, sem token na query string
     const sseUrl = `${API_BASE_URL}/barbershops/${barbershopId}/bookings/stream`;
 
     // 2. Crie a conexão EventSource com 'withCredentials: true'
-    // Isso instrui o navegador a enviar cookies (como 'adminAuthToken')
-    // associados ao domínio da API_BASE_URL.
     const eventSource = new EventSource(sseUrl, { withCredentials: true });
 
     // Listener para confirmar a conexão (opcional)
@@ -184,7 +183,6 @@ export function AgendamentosPage() {
     eventSource.addEventListener("new_booking", (event) => {
       try {
         const newBookingData = JSON.parse(event.data);
-        console.log(`newBookingData`, newBookingData);
         console.log("[SSE] Novo agendamento recebido (via cookie)!", newBookingData);
         toast.info("Novo agendamento recebido!");
 
@@ -205,8 +203,6 @@ export function AgendamentosPage() {
     // Listener para erros na conexão
     eventSource.onerror = (error) => {
       console.error("[SSE] Erro na conexão (com credenciais):", error);
-      // Considerar se precisa fechar ou se a reconexão automática é suficiente
-      // eventSource.close();
     };
 
     // Função de limpeza: Fecha a conexão quando o componente desmonta
@@ -214,7 +210,6 @@ export function AgendamentosPage() {
       console.log("[SSE] Fechando conexão (com credenciais)...");
       eventSource.close();
     };
-    // As dependências não precisam mais incluir fetchPageData se a atualização for local
   }, [barbershopId]);
 
   const handleDeleteBooking = async (bookingId: string) => {
@@ -233,7 +228,6 @@ export function AgendamentosPage() {
   };
 
   const handleSelectEvent = (event: any) => {
-    // O evento da agenda tem o nosso agendamento original no campo 'resource'
     const fullBookingData = event.resource;
 
     if (!fullBookingData) {
@@ -251,18 +245,14 @@ export function AgendamentosPage() {
     setIsModalOpen(true);
   };
 
-  // Adicione esta função no seu componente AgendamentosPage
   const generateBreakEvents = (date: Date) => {
     const breakEvents: any[] = [];
 
-    // Para cada barbeiro que tem break habilitado
     allBarbers.forEach((barber, index) => {
       if (!barber.break?.enabled || !barber.break.days?.length) return;
 
-      // Verifica se o barbeiro está sendo filtrado
       if (selectedBarberId !== "all" && selectedBarberId !== barber._id) return;
 
-      // Mapear dias da semana para números (0 = domingo, 1 = segunda, etc.)
       const dayMapping = {
         Domingo: 0,
         "Segunda-feira": 1,
@@ -275,7 +265,6 @@ export function AgendamentosPage() {
 
       const breakDayNumbers = barber.break.days.map((day) => dayMapping[day as keyof typeof dayMapping]).filter((dayNum) => dayNum !== undefined);
 
-      // Gerar eventos para a semana atual (baseado na data atual da agenda)
       const startOfWeek = new Date(date);
       startOfWeek.setDate(date.getDate() - date.getDay());
 
@@ -295,7 +284,6 @@ export function AgendamentosPage() {
           const breakEnd = new Date(currentDay);
           breakEnd.setHours(endHour, endMinute, 0, 0);
 
-          // Usar a mesma cor do barbeiro
           const colorIndex = index % BARBER_COLORS.length;
           const barberColor = BARBER_COLORS[colorIndex];
 
@@ -319,7 +307,6 @@ export function AgendamentosPage() {
     return breakEvents;
   };
 
-  // 3. Formata os eventos para a agenda, agora usando o mapa de cores
   const agendaEvents = useMemo(() => {
     const barberColorMap = new Map<string, string>();
     allBarbers.forEach((barber, index) => {
@@ -376,7 +363,6 @@ export function AgendamentosPage() {
       };
     });
 
-    // ✅ ADICIONAR OS BREAKS AQUI
     const breakEvents = generateBreakEvents(currentDate);
 
     return [...bookingEvents, ...blockEvents, ...breakEvents];
@@ -386,15 +372,14 @@ export function AgendamentosPage() {
     setIsUpdatingStatus(true);
     const originalBookings = [...bookings];
 
-    // Atualização otimista da UI
     setBookings((prev) => prev.map((b) => (b._id === bookingId ? { ...b, status } : b)));
 
     try {
       await apiClient.put(`/barbershops/${barbershopId}/bookings/${bookingId}/status`, { status });
       toast.success(`Agendamento atualizado para "${status === "completed" ? "Concluído" : "Cancelado"}"!`);
-      setIsModalOpen(false); // Fecha o modal após a ação
+      setIsModalOpen(false);
     } catch (error) {
-      setBookings(originalBookings); // Reverte em caso de erro
+      setBookings(originalBookings);
       toast.error("Falha ao atualizar o status do agendamento.");
     } finally {
       setIsUpdatingStatus(false);
@@ -402,20 +387,11 @@ export function AgendamentosPage() {
   };
 
   const handleCreateBlock = (slotInfo: { start: Date; end: Date }) => {
-    // 1. A biblioteca da agenda nos entrega o objeto 'slotInfo'.
-    //    Ele contém as datas de início e fim exatas que você selecionou na grade.
     const { start, end } = slotInfo;
-
     const initialBarberId = selectedBarberId !== "all" ? selectedBarberId : "";
-
-    // 2. O react-big-calendar trabalha com datas locais, mas quando convertemos para ISO string
-    // elas são convertidas para UTC. Precisamos garantir que o horário local seja preservado.
-    // Exemplo: se o usuário selecionou 9h no calendário, queremos que seja 9h no horário de Brasília
     const startTime = new Date(start);
     const endTime = new Date(end);
 
-    // 3. Nós salvamos essas datas diretamente no nosso estado 'newBlockData'.
-    //    Aqui garantimos que startTime e endTime terão os valores corretos.
     setNewBlockData({
       startTime: startTime,
       endTime: endTime,
@@ -423,7 +399,6 @@ export function AgendamentosPage() {
       barberId: initialBarberId,
     });
 
-    // 4. Abrimos o modal, que já estará pré-preenchido com esses horários.
     setIsBlockModalOpen(true);
   };
 
@@ -434,8 +409,6 @@ export function AgendamentosPage() {
     }
     setIsCreatingBlock(true);
     try {
-      // Garantir que as datas sejam enviadas corretamente
-      // Se o usuário selecionou 9h no calendário, queremos que seja 9h no horário de Brasília
       const startTime = newBlockData.startTime;
       const endTime = newBlockData.endTime;
 
@@ -477,12 +450,8 @@ export function AgendamentosPage() {
   };
 
   const getStatusInfo = (booking: PopulatedBooking) => {
-    // 1. Verifica se a data do agendamento já passou
     const bookingIsPast = isPast(new Date(booking.time));
 
-    // 2. Lógica de status
-    // Se o agendamento já passou E o status ainda é "booked",
-    // consideramos ele como "Ocorrido" (pendente de confirmação)
     if (bookingIsPast && booking.status === "booked") {
       return {
         text: "Ocorrido",
@@ -490,7 +459,6 @@ export function AgendamentosPage() {
       };
     }
 
-    // A lógica para os outros status continua a mesma
     switch (booking.status) {
       case "completed":
         return {
@@ -535,7 +503,7 @@ export function AgendamentosPage() {
 
   const isDateInPast = (day: number) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas o dia
+    today.setHours(0, 0, 0, 0);
     return new Date(year, month, day) < today;
   };
 
@@ -544,20 +512,10 @@ export function AgendamentosPage() {
 
     setIsRedeeming(true);
     try {
-      // 1. Chama a nova rota de API
       await apiClient.put(`${API_BASE_URL}/barbershops/${barbershopId}/bookings/${selectedBooking._id}/redeem-reward`);
-
-      // 2. Sucesso
       toast.success("Recompensa resgatada com sucesso!");
-
-      // 3. Fecha o modal
       setIsModalOpen(false);
-
-      // 4. Busca todos os dados novos (incluindo o agendamento atualizado)
-      // Isso garante que 'bookings' e 'agendaEvents' sejam recriados com dados válidos
       await fetchPageData();
-
-      // 5. Limpa o estado do modal
       setSelectedBooking(null);
     } catch (error: any) {
       console.error("Erro ao resgatar recompensa:", error);
@@ -567,12 +525,9 @@ export function AgendamentosPage() {
     }
   };
 
-  if (isLoading && bookings.length === 0 && allBarbers.length === 0)
-    return <p className="text-center p-10">Carregando agendamentos e barbeiros...</p>;
-
   return (
     <Card className="gap-2 md:gap-8">
-      <CardHeader className="flex justify-between">
+      <CardHeader className="flex flex-row justify-between items-center">
         <div className="flex gap-8 items-center flex-wrap">
           <CardTitle>Agendamentos</CardTitle>
           <div className="flex-wrap flex gap-2 items-center">
@@ -597,323 +552,318 @@ export function AgendamentosPage() {
         </Link>
       </CardHeader>
       <CardContent>
-        <div className="w-full rounded-lg border shadow-sm bg-background mt-4 mb-4 md:hidden">
-          <div className="flex items-center justify-between p-3 border-b">
-            <span className="text-lg font-semibold">
-              {monthNames[month]} {year}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={handleNextMonth} className="h-8 w-8">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+        {isLoading && bookings.length === 0 && allBarbers.length === 0 ? (
+          <div className="flex justify-center items-center p-10 gap-3">
+            <Loader2 className="animate-spin h-6 w-6" />
+            <p className="text-center text-muted-foreground">Carregando agendamentos e barbeiros...</p>
           </div>
-          <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground p-2 border-t">
-            {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
-              <div key={day}>{day}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7">
-            {days.map((day, index) => {
-              // --- 1. LÓGICA DE ESTILO CENTRALIZADA AQUI ---
-              const isSelected = isSameDay(currentDate, new Date(year, month, day));
-              const isPast = isDateInPast(day);
-
-              return (
-                <div key={index} className={`p-1 flex items-center justify-center h-12 border-t ${index % 7 !== 0 ? "border-l" : ""}`}>
-                  {day && (
-                    <button
-                      type="button"
-                      // O botão não é mais desabilitado
-                      onClick={() => handleDateSelect(day)}
-                      className={`
-                                flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors
-                                ${/* --- 2. NOVA LÓGICA DE CLASSES --- */ ""}
-                                ${isSelected
-                          ? "bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2" // Prioridade 1: Dia selecionado
-                          : isPast
-                            ? "text-muted-foreground opacity-75 hover:bg-accent" // Prioridade 2: Dia passado
-                            : isToday(day)
-                              ? "bg-accent text-accent-foreground" // Prioridade 3: Dia de hoje
-                              : "hover:bg-accent"
-                        }
-                              `}
-                    >
-                      {day}
-                    </button>
-                  )}
+        ) : (
+          <>
+            <div className="w-full rounded-lg border shadow-sm bg-background mt-4 mb-4 md:hidden">
+              <div className="flex items-center justify-between p-3 border-b">
+                <span className="text-lg font-semibold">
+                  {monthNames[month]} {year}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth} className="h-8 w-8">
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={handleNextMonth} className="h-8 w-8">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <AgendaView
-          events={agendaEvents}
-          onSelectEvent={handleSelectEvent}
-          onSelectSlot={handleCreateBlock}
-          currentDate={currentDate}
-          onNavigate={setCurrentDate}
-        />
-
-        <Dialog open={isBlockModalOpen} onOpenChange={setIsBlockModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Bloquear Horário na Agenda</DialogTitle>
-              <DialogDescription>
-                Defina um período e um motivo para o bloqueio. Nenhum agendamento poderá ser feito neste intervalo.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="blockTitle">Motivo do Bloqueio</Label>
-                <Input
-                  id="blockTitle"
-                  placeholder="Ex: Almoço, Consulta Médica"
-                  value={newBlockData.title}
-                  onChange={(e) => setNewBlockData({ ...newBlockData, title: e.target.value })}
-                />
               </div>
-              {selectedBarberId === "all" && (
-                <div className="space-y-2">
-                  <Label htmlFor="blockBarber">Profissional</Label>
-                  <Select value={newBlockData.barberId} onValueChange={(value) => setNewBlockData({ ...newBlockData, barberId: value })}>
-                    <SelectTrigger id="blockBarber">
-                      <SelectValue placeholder="Selecione um profissional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allBarbers.map((barber) => (
-                        <SelectItem key={barber._id} value={barber._id}>
-                          {barber.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="text-sm text-muted-foreground pt-2">
-                <p>
-                  <strong>Período:</strong>{" "}
-                  {newBlockData.startTime && newBlockData.endTime
-                    ? `${format(newBlockData.startTime, "HH:mm")} - ${format(newBlockData.endTime, "HH:mm")}`
-                    : ""}
-                </p>
+              <div className="grid grid-cols-7 text-center text-xs font-medium text-muted-foreground p-2 border-t">
+                {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
+                  <div key={day}>{day}</div>
+                ))}
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setIsBlockModalOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSaveBlock} disabled={isCreatingBlock}>
-                {isCreatingBlock && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar Bloqueio
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            {selectedBooking && (
-              <>
-                {/* Lógica de Fidelidade movida para o topo para ser reutilizada */}
-                {(() => {
-                  const loyaltyData = selectedBooking.customer?.loyaltyData?.find((data: any) => data.barbershop === barbershopId);
-                  const hasReward = loyaltyData && loyaltyData.rewards > 0;
-
-                  const isPaid = selectedBooking.paymentStatus === "approved" || selectedBooking.paymentStatus === "paid_in_store";
-                  const isRedeemed = selectedBooking.paymentStatus === "redeemed"; // Assumindo que a API retorne isso
-                  const isCanceled = selectedBooking.status === "canceled";
-
-                  // O cliente pode resgatar se tiver recompensa E
-                  // o agendamento NÃO estiver pago, NÃO estiver resgatado, e NÃO estiver cancelado
-                  const canRedeem = hasReward && !isPaid && !isRedeemed && !isCanceled;
+              <div className="grid grid-cols-7">
+                {days.map((day, index) => {
+                  const isSelected = isSameDay(currentDate, new Date(year, month, day));
+                  const isPast = isDateInPast(day);
 
                   return (
-                    <>
-                      <DialogHeader>
-                        <DialogTitle>Detalhes do Agendamento</DialogTitle>
-                        <DialogDescription>
-                          {format(new Date(selectedBooking.time), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="flex items-center gap-3">
-                          <User className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Cliente</p> <p className="font-semibold">{selectedBooking.customer?.name}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Phone className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Telefone</p>
-                            <a
-                              href={`https://wa.me/55${selectedBooking.customer?.phone}`}
-                              target="_blank"
-                              className="font-semibold underline flex items-center gap-2"
-                            >
-                              {selectedBooking.customer?.phone} <WhatsAppIcon />
-                            </a>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Scissors className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Serviço</p> <p className="font-semibold">{selectedBooking.service?.name}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <User className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="text-sm text-muted-foreground">Profissional</p>{" "}
-                            <p className="font-semibold">{selectedBooking.barber?.name}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Alerta de Fidelidade (Atualizado) */}
-                      {hasReward && !isRedeemed && (
-                        <div className="flex items-center gap-3 p-3 rounded-md bg-yellow-50 border border-yellow-200">
-                          <Star className="h-5 w-5 text-yellow-500 flex-shrink-0" />
-                          <div>
-                            <p className="font-semibold text-yellow-800">Prêmio de Fidelidade Disponível!</p>
-                            <p className="text-sm text-yellow-700">Este cliente tem {loyaltyData.rewards} recompensa(s) para resgatar.</p>
-                          </div>
-                        </div>
+                    <div key={index} className={`p-1 flex items-center justify-center h-12 border-t ${index % 7 !== 0 ? "border-l" : ""}`}>
+                      {day && (
+                        <button
+                          type="button"
+                          onClick={() => handleDateSelect(day)}
+                          className={`
+                            flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors
+                            ${isSelected
+                              ? "bg-primary text-primary-foreground ring-2 ring-ring ring-offset-2"
+                              : isPast
+                                ? "text-muted-foreground opacity-75 hover:bg-accent"
+                                : isToday(day)
+                                  ? "bg-accent text-accent-foreground"
+                                  : "hover:bg-accent"
+                            }
+                          `}
+                        >
+                          {day}
+                        </button>
                       )}
-                      {/* Alerta de Resgatado */}
-                      {isRedeemed && (
-                        <div className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200">
-                          <Star className="h-5 w-5 text-green-500 flex-shrink-0" />
-                          <div>
-                            <p className="font-semibold text-green-800">Prêmio Resgatado!</p>
-                            <p className="text-sm text-green-700">Este agendamento foi pago com um prêmio.</p>
-                          </div>
-                        </div>
-                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                      {/* Rodapé com o Status e os Botões de Ação */}
-                      <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center gap-2">
-                        {/* Lado Esquerdo: Status */}
-                        <div className="flex gap-4 items-end flex-wrap">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Status</span>
-                            <Badge className={getStatusInfo(selectedBooking).className}>{getStatusInfo(selectedBooking).text}</Badge>
+            <AgendaView
+              events={agendaEvents}
+              onSelectEvent={handleSelectEvent}
+              onSelectSlot={handleCreateBlock}
+              currentDate={currentDate}
+              onNavigate={setCurrentDate}
+            />
+
+            <Dialog open={isBlockModalOpen} onOpenChange={setIsBlockModalOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Bloquear Horário na Agenda</DialogTitle>
+                  <DialogDescription>
+                    Defina um período e um motivo para o bloqueio. Nenhum agendamento poderá ser feito neste intervalo.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="blockTitle">Motivo do Bloqueio</Label>
+                    <Input
+                      id="blockTitle"
+                      placeholder="Ex: Almoço, Consulta Médica"
+                      value={newBlockData.title}
+                      onChange={(e) => setNewBlockData({ ...newBlockData, title: e.target.value })}
+                    />
+                  </div>
+                  {selectedBarberId === "all" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="blockBarber">Profissional</Label>
+                      <Select value={newBlockData.barberId} onValueChange={(value) => setNewBlockData({ ...newBlockData, barberId: value })}>
+                        <SelectTrigger id="blockBarber">
+                          <SelectValue placeholder="Selecione um profissional" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allBarbers.map((barber) => (
+                            <SelectItem key={barber._id} value={barber._id}>
+                              {barber.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="text-sm text-muted-foreground pt-2">
+                    <p>
+                      <strong>Período:</strong>{" "}
+                      {newBlockData.startTime && newBlockData.endTime
+                        ? `${format(newBlockData.startTime, "HH:mm")} - ${format(newBlockData.endTime, "HH:mm")}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setIsBlockModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSaveBlock} disabled={isCreatingBlock}>
+                    {isCreatingBlock && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Salvar Bloqueio
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+              <DialogContent className="sm:max-w-[425px]">
+                {selectedBooking && (
+                  <>
+                    {(() => {
+                      const loyaltyData = selectedBooking.customer?.loyaltyData?.find((data: any) => data.barbershop === barbershopId);
+                      const hasReward = loyaltyData && loyaltyData.rewards > 0;
+
+                      const isPaid = selectedBooking.paymentStatus === "approved" || selectedBooking.paymentStatus === "paid_in_store";
+                      const isRedeemed = selectedBooking.paymentStatus === "redeemed";
+                      const isCanceled = selectedBooking.status === "canceled";
+
+                      const canRedeem = hasReward && !isPaid && !isRedeemed && !isCanceled;
+
+                      return (
+                        <>
+                          <DialogHeader>
+                            <DialogTitle>Detalhes do Agendamento</DialogTitle>
+                            <DialogDescription>
+                              {format(new Date(selectedBooking.time), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="flex items-center gap-3">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm text-muted-foreground">Cliente</p> <p className="font-semibold">{selectedBooking.customer?.name}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Phone className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm text-muted-foreground">Telefone</p>
+                                <a
+                                  href={`https://wa.me/55${selectedBooking.customer?.phone}`}
+                                  target="_blank"
+                                  className="font-semibold underline flex items-center gap-2"
+                                >
+                                  {selectedBooking.customer?.phone} <WhatsAppIcon />
+                                </a>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Scissors className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm text-muted-foreground">Serviço</p> <p className="font-semibold">{selectedBooking.service?.name}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <User className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm text-muted-foreground">Profissional</p>{" "}
+                                <p className="font-semibold">{selectedBooking.barber?.name}</p>
+                              </div>
+                            </div>
                           </div>
-                          {paymentsEnabled && selectedBooking.paymentStatus && (
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Pagamento</span>
-                              <Badge className={getPaymentStatusInfo(selectedBooking).className}>
-                                {translatePaymentStatus(selectedBooking.paymentStatus).text}
-                              </Badge>
+
+                          {hasReward && !isRedeemed && (
+                            <div className="flex items-center gap-3 p-3 rounded-md bg-yellow-50 border border-yellow-200">
+                              <Star className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+                              <div>
+                                <p className="font-semibold text-yellow-800">Prêmio de Fidelidade Disponível!</p>
+                                <p className="text-sm text-yellow-700">Este cliente tem {loyaltyData.rewards} recompensa(s) para resgatar.</p>
+                              </div>
                             </div>
                           )}
-                        </div>
-
-                        {/* Lado Direito: Botões de Ação */}
-                        <div className="flex gap-2 flex-wrap sm:flex-nowrap justify-center sm:justify-end">
-                          {/* --- NOVO BOTÃO DE RESGATE --- */}
-                          {canRedeem && (
-                            <Button
-                              variant="outline"
-                              className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700"
-                              onClick={handleRedeemReward}
-                              disabled={isRedeeming || isUpdatingStatus}
-                            >
-                              {isRedeeming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="mr-2 h-4 w-4" />}
-                              Resgatar Prêmio
-                            </Button>
+                          {isRedeemed && (
+                            <div className="flex items-center gap-3 p-3 rounded-md bg-green-50 border border-green-200">
+                              <Star className="h-5 w-5 text-green-500 flex-shrink-0" />
+                              <div>
+                                <p className="font-semibold text-green-800">Prêmio Resgatado!</p>
+                                <p className="text-sm text-green-700">Este agendamento foi pago com um prêmio.</p>
+                              </div>
+                            </div>
                           )}
 
-                          {/* Botões existentes (agora condicionados por 'isRedeemed') */}
-                          {selectedBooking.status !== "canceled" && !isRedeemed && (
-                            <Button
-                              variant="destructive"
-                              onClick={() => handleUpdateBookingStatus(selectedBooking._id, "canceled")}
-                              disabled={isUpdatingStatus || isRedeeming || isPaid}
-                            >
-                              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                              Cancelar
-                            </Button>
-                          )}
-                          {selectedBooking.status !== "completed" && !isRedeemed && (
-                            <Button
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => handleUpdateBookingStatus(selectedBooking._id, "completed")}
-                              disabled={isUpdatingStatus || isRedeeming}
-                            >
-                              {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                              Concluir
-                            </Button>
-                          )}
-                        </div>
-                      </DialogFooter>
-                    </>
-                  );
-                })()}
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
+                          <DialogFooter className="flex flex-col sm:flex-row sm:justify-between items-center gap-2">
+                            <div className="flex gap-4 items-end flex-wrap">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Status</span>
+                                <Badge className={getStatusInfo(selectedBooking).className}>{getStatusInfo(selectedBooking).text}</Badge>
+                              </div>
+                              {paymentsEnabled && selectedBooking.paymentStatus && (
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Pagamento</span>
+                                  <Badge className={getPaymentStatusInfo(selectedBooking).className}>
+                                    {translatePaymentStatus(selectedBooking.paymentStatus).text}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
 
-        <AlertDialog open={!!bookingToDelete} onOpenChange={() => setBookingToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-              <AlertDialogDescription>Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => bookingToDelete && handleDeleteBooking(bookingToDelete)}
-                disabled={isDeleting}
-                className="bg-red-500 hover:bg-red-600"
-              >
-                {isDeleting ? "Excluindo..." : "Excluir"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-        {/* Modal para deletar bloqueio */}
-        <AlertDialog open={isBlockDeleteModalOpen} onOpenChange={() => setIsBlockDeleteModalOpen(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remover bloqueio de horário</AlertDialogTitle>
-              <AlertDialogDescription>
-                Tem certeza que deseja remover este bloqueio?
-                <br />
-                <strong>{selectedBlock?.title}</strong>
-                {selectedBlock?.barberName && (
-                  <>
-                    <br />
-                    Profissional: <strong>{selectedBlock.barberName}</strong>
+                            <div className="flex gap-2 flex-wrap sm:flex-nowrap justify-center sm:justify-end">
+                              {canRedeem && (
+                                <Button
+                                  variant="outline"
+                                  className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700"
+                                  onClick={handleRedeemReward}
+                                  disabled={isRedeeming || isUpdatingStatus}
+                                >
+                                  {isRedeeming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="mr-2 h-4 w-4" />}
+                                  Resgatar Prêmio
+                                </Button>
+                              )}
+
+                              {selectedBooking.status !== "canceled" && !isRedeemed && (
+                                <Button
+                                  variant="destructive"
+                                  onClick={() => handleUpdateBookingStatus(selectedBooking._id, "canceled")}
+                                  disabled={isUpdatingStatus || isRedeeming || isPaid}
+                                >
+                                  {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                  Cancelar
+                                </Button>
+                              )}
+                              {selectedBooking.status !== "completed" && !isRedeemed && (
+                                <Button
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => handleUpdateBookingStatus(selectedBooking._id, "completed")}
+                                  disabled={isUpdatingStatus || isRedeeming}
+                                >
+                                  {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                  Concluir
+                                </Button>
+                              )}
+                            </div>
+                          </DialogFooter>
+                        </>
+                      );
+                    })()}
                   </>
                 )}
-                <br />
-                Período:{" "}
-                {selectedBlock?.startTime && selectedBlock?.endTime
-                  ? `${format(new Date(selectedBlock.startTime), "dd/MM/yyyy HH:mm")} - ${format(new Date(selectedBlock.endTime), "HH:mm")}`
-                  : ""}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeletingBlock} onClick={() => setIsBlockDeleteModalOpen(false)}>
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => selectedBlock && handleDeleteBlock(selectedBlock._id)}
-                disabled={isDeletingBlock}
-                className="bg-red-500 hover:bg-red-600"
-              >
-                {isDeletingBlock ? "Removendo..." : "Remover bloqueio"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={!!bookingToDelete} onOpenChange={() => setBookingToDelete(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                  <AlertDialogDescription>Tem certeza que deseja excluir este agendamento? Esta ação não pode ser desfeita.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => bookingToDelete && handleDeleteBooking(bookingToDelete)}
+                    disabled={isDeleting}
+                    className="bg-red-500 hover:bg-red-600"
+                  >
+                    {isDeleting ? "Excluindo..." : "Excluir"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={isBlockDeleteModalOpen} onOpenChange={() => setIsBlockDeleteModalOpen(false)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remover bloqueio de horário</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja remover este bloqueio?
+                    <br />
+                    <strong>{selectedBlock?.title}</strong>
+                    {selectedBlock?.barberName && (
+                      <>
+                        <br />
+                        Profissional: <strong>{selectedBlock.barberName}</strong>
+                      </>
+                    )}
+                    <br />
+                    Período:{" "}
+                    {selectedBlock?.startTime && selectedBlock?.endTime
+                      ? `${format(new Date(selectedBlock.startTime), "dd/MM/yyyy HH:mm")} - ${format(new Date(selectedBlock.endTime), "HH:mm")}`
+                      : ""}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeletingBlock} onClick={() => setIsBlockDeleteModalOpen(false)}>
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => selectedBlock && handleDeleteBlock(selectedBlock._id)}
+                    disabled={isDeletingBlock}
+                    className="bg-red-500 hover:bg-red-600"
+                  >
+                    {isDeletingBlock ? "Removendo..." : "Remover bloqueio"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        )}
       </CardContent>
     </Card>
   );
