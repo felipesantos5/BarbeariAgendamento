@@ -31,6 +31,26 @@ interface WhatsAppStatus {
 
 const QR_CODE_EXPIRY_TIME = 45; // QR code expira em ~45 segundos
 
+const formatPhoneNumber = (phone: string) => {
+  if (!phone) return "";
+  // Remove tudo que não for dígito
+  let cleaned = phone.replace(/\D/g, "");
+
+  // Se começar com 55, remove para formatar o padrão nacional
+  if (cleaned.startsWith("55") && cleaned.length > 10) {
+    cleaned = cleaned.substring(2);
+  }
+
+  // Aplica a máscara (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
+  if (cleaned.length === 11) {
+    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 7)}-${cleaned.substring(7)}`;
+  } else if (cleaned.length === 10) {
+    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 6)}-${cleaned.substring(6)}`;
+  }
+
+  return phone; // Fallback caso não bata com os tamanhos acima
+};
+
 export const WhatsAppConfigPage = () => {
   const { barbershopId } = useOutletContext<AdminOutletContext>();
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppStatus | null>(null);
@@ -290,34 +310,39 @@ export const WhatsAppConfigPage = () => {
             {whatsappStatus?.status === "connected" && whatsappStatus.connectedNumber && (
               <div className="text-right space-y-1">
                 <Label className="text-sm text-muted-foreground">Número Conectado</Label>
-                <p className="font-mono font-semibold text-lg">{whatsappStatus.connectedNumber}</p>
+                <p className="font-mono font-semibold text-lg">{formatPhoneNumber(whatsappStatus.connectedNumber)}</p>
               </div>
             )}
           </div>
 
-          {/* Instruções */}
-          <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
-            <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
-              <li>Clique em "Conectar WhatsApp" abaixo</li>
-              <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
-              <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
-              <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
-            </ol>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-              💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
-            </p>
-          </fieldset>
+          {/* Instruções - Escondidas se estiver conectado */}
+          {whatsappStatus?.status !== "connected" && (
+            <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
+              <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
+                <li>Clique em "Conectar WhatsApp" abaixo</li>
+                <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
+                <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
+                <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
+              </ol>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+                💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
+              </p>
+            </fieldset>
+          )}
 
           {/* Ações */}
           <div className="flex gap-3">
             {whatsappStatus?.status !== "connected" ? (
               <Button onClick={handleConnect} disabled={isConnecting} size="lg" className="w-full sm:w-auto">
                 {isConnecting ? (
-                  <>
+                  <div className="flex items-center gap-2">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Conectando...
-                  </>
+                    <span>Conectando...</span>
+                    <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">
+                      (Gerando conexão, aguarde...)
+                    </span>
+                  </div>
                 ) : (
                   <>
                     <MessageSquare className="mr-2 h-4 w-4" />
@@ -393,7 +418,7 @@ export const WhatsAppConfigPage = () => {
                   {isRefreshingQR ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Gerando...
+                      Gerando conexão, aguarde...
                     </>
                   ) : (
                     <>
@@ -417,7 +442,17 @@ export const WhatsAppConfigPage = () => {
                 </div>
               </>
             ) : (
-              <Loader2 className="animate-spin h-16 w-16 text-primary" />
+              <div className="flex flex-col items-center gap-4 py-12">
+                <Loader2 className="animate-spin h-16 w-16 text-primary" />
+                <div className="text-center space-y-2">
+                  <p className="text-lg font-medium animate-pulse text-primary">
+                    Gerando conexão, aguarde...
+                  </p>
+                  <p className="text-sm text-muted-foreground px-8">
+                    Isso pode levar alguns segundos. Não feche esta janela.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </DialogContent>

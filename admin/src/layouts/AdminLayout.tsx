@@ -272,6 +272,12 @@ export function AdminLayout() {
           roles: ["admin"],
         },
         {
+          to: "whatsapp",
+          label: "WhatsApp",
+          icon: <MessageCircle className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
+        {
           to: "checkout",
           label: "Pagamento",
           icon: <CreditCard className="mr-2 h-4 w-4" />,
@@ -283,12 +289,7 @@ export function AdminLayout() {
           icon: <Receipt className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
-        {
-          to: "whatsapp",
-          label: "WhatsApp",
-          icon: <MessageCircle className="mr-2 h-4 w-4" />,
-          roles: ["admin"],
-        },
+
         {
           to: "recorrencia",
           label: "Recorrência",

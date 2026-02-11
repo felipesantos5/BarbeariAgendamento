@@ -36,6 +36,8 @@ import {
   Plus,
   Trash2,
   Clock,
+  Mail,
+  Info,
 } from "lucide-react";
 import { PhoneFormat } from "@/helper/phoneFormater";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -82,6 +84,7 @@ interface Customer {
   _id: string;
   name: string;
   phone: string;
+  email?: string;
   imageUrl?: string;
   createdAt: string;
   subscriptions?: Subscription[];
@@ -148,6 +151,10 @@ export function CustomersPage() {
   const [selectedSubscriptionToRemove, setSelectedSubscriptionToRemove] = useState<{ subscriptionId: string; customerId: string; planName: string } | null>(null);
   const [isRemovingPlan, setIsRemovingPlan] = useState(false);
 
+  // Estados para Modal de Detalhes da Assinatura
+  const [selectedSubscriptionForDetails, setSelectedSubscriptionForDetails] = useState<Subscription | null>(null);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+
   // Estados para Histórico de Planos
   const [isPlanHistoryModalOpen, setIsPlanHistoryModalOpen] = useState(false);
   const [planHistory, setPlanHistory] = useState<any[]>([]);
@@ -198,6 +205,28 @@ export function CustomersPage() {
     fetchPageData(currentPage);
   }, [fetchPageData, currentPage]);
 
+  // SOLUÇÃO DEFINITIVA: Destravamento forçado da UI
+  useEffect(() => {
+    const unlock = () => {
+      const hasOpenOverlay = document.querySelector('[data-state="open"], .radix-overlay, [role="dialog"], [data-radix-portal]');
+      if (!hasOpenOverlay && (document.body.style.pointerEvents === "none" || document.body.style.overflow === "hidden")) {
+        document.body.style.pointerEvents = "auto";
+        document.body.style.overflow = "auto";
+        console.log("🛠️ UI Unlocked by sentinel");
+      }
+    };
+
+    const observer = new MutationObserver(unlock);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["style", "class"] });
+
+    const interval = setInterval(unlock, 500);
+
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, []);
+
   const fetchCustomerBookings = async (customerId: string) => {
     setIsLoadingBookings(true);
     try {
@@ -213,16 +242,21 @@ export function CustomersPage() {
   // --- Handlers ---
   const handleOpenBookingsModal = async (customer: Customer) => {
     setSelectedCustomerForBookings(customer);
-    setIsBookingsModalOpen(true);
+    setTimeout(() => {
+      setIsBookingsModalOpen(true);
+    }, 100);
     await fetchCustomerBookings(customer._id);
   };
 
   const handleOpenSubscribeModal = (customer: Customer) => {
     setSelectedCustomerForPlan(customer);
     setSelectedPlanId("");
-    setSelectedBarberId("all"); // Define "Todos" como padrão
+    setSelectedBarberId("all");
     setAssignPlanError("");
-    setIsAssignPlanModalOpen(true);
+    // Micro-delay necessário para evitar conflito com o fechamento do DropdownMenu
+    setTimeout(() => {
+      setIsAssignPlanModalOpen(true);
+    }, 100);
   };
 
   const handleSubscribeCustomer = async () => {
@@ -242,7 +276,13 @@ export function CustomersPage() {
 
       toast.success(`${selectedCustomerForPlan.name} agora tem um novo plano!`);
       setIsAssignPlanModalOpen(false);
-      fetchPageData(currentPage);
+
+      // Força o desbloqueio da UI após o fechamento do modal
+      setTimeout(() => {
+        document.body.style.pointerEvents = "auto";
+        document.body.style.overflow = "auto";
+        fetchPageData(currentPage);
+      }, 300);
     } catch (error: any) {
       console.error("Erro ao atribuir plano:", error);
       const apiError = error.response?.data?.message || "Falha ao atribuir o plano.";
@@ -256,7 +296,9 @@ export function CustomersPage() {
   // Função para abrir modal de remover plano
   const handleOpenRemovePlanModal = (subscriptionId: string, customerId: string, planName: string) => {
     setSelectedSubscriptionToRemove({ subscriptionId, customerId, planName });
-    setIsRemovePlanModalOpen(true);
+    setTimeout(() => {
+      setIsRemovePlanModalOpen(true);
+    }, 100);
   };
 
   // Função para remover plano
@@ -272,7 +314,13 @@ export function CustomersPage() {
       toast.success("Plano removido com sucesso!");
       setIsRemovePlanModalOpen(false);
       setSelectedSubscriptionToRemove(null);
-      fetchPageData(currentPage);
+
+      // Força o desbloqueio da UI após o fechamento
+      setTimeout(() => {
+        document.body.style.pointerEvents = "auto";
+        document.body.style.overflow = "auto";
+        fetchPageData(currentPage);
+      }, 300);
     } catch (error: any) {
       console.error("Erro ao remover plano:", error);
       toast.error(error.response?.data?.error || "Erro ao remover plano.");
@@ -284,8 +332,10 @@ export function CustomersPage() {
   // Função para abrir modal de histórico de planos
   const handleOpenPlanHistoryModal = async (customer: Customer) => {
     setSelectedCustomerForHistory(customer);
-    setPlanHistoryFilter("active"); // Reset para "Ativos" como padrão
-    setIsPlanHistoryModalOpen(true);
+    setPlanHistoryFilter("active");
+    setTimeout(() => {
+      setIsPlanHistoryModalOpen(true);
+    }, 100);
     setIsLoadingPlanHistory(true);
 
     try {
@@ -341,8 +391,14 @@ export function CustomersPage() {
 
       toast.success("Cliente criado com sucesso!");
       setIsCreateModalOpen(false);
-      fetchPageData(1); // Recarrega a lista na página 1
-      setCurrentPage(1); // Reseta o estado da página
+
+      // Força o desbloqueio da UI após o fechamento
+      setTimeout(() => {
+        document.body.style.pointerEvents = "auto";
+        document.body.style.overflow = "auto";
+        fetchPageData(1); // Recarrega a lista na página 1
+        setCurrentPage(1); // Reseta o estado da página
+      }, 300);
     } catch (error: any) {
       const msg = error.response?.data?.message || "Erro ao criar cliente. Verifique se o telefone já existe.";
       console.error(error);
@@ -533,16 +589,16 @@ export function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && customers.length > 0 && (
+                {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24 relative">
-                      <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <TableCell colSpan={8} className="text-center h-64">
+                      <div className="flex flex-col items-center justify-center space-y-4">
+                        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                        <span className="text-muted-foreground font-medium text-lg">Buscando clientes...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                )}
-                {!isLoading && customers.length > 0 ? (
+                ) : customers.length > 0 ? (
                   customers.map((customer) => {
                     const activeSubscriptions = customer.subscriptions?.filter((sub) => sub.status === "active") || [];
 
@@ -565,10 +621,13 @@ export function CustomersPage() {
                               )}
                             </div>
                             <div>
-                              <div className="font-medium">{customer.name}</div>
-                              <div className="text-sm text-muted-foreground flex items-center gap-1 hover:text-primary">
-                                <History size={14} /> Ver Histórico
-                              </div>
+                              <div className="font-medium text-base">{customer.name}</div>
+                              {customer.email && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                                  <Mail size={13} className="text-[var(--loja-theme-color)]" />
+                                  <span className="truncate max-w-[180px]">{customer.email}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -586,45 +645,27 @@ export function CustomersPage() {
                           </a>
                         </TableCell>
 
-                        {/* Célula Planos Ativos (Renderiza múltiplos) */}
                         <TableCell>
                           {activeSubscriptions.length > 0 ? (
-                            <div className="space-y-3 max-w-[350px]">
-                              {activeSubscriptions.map((subscription) => {
-                                const daysRemaining = getDaysRemaining(subscription.endDate);
-                                return (
-                                  <div key={subscription._id} className="space-y-2 p-2 rounded-md border bg-muted/50 border-primary/20">
-                                    <p className="font-medium text-sm flex items-center gap-1">
-                                      <CreditCard className="h-4 w-4 text-primary" />
-                                      {subscription.plan.name}
-                                      {(subscription.plan.totalCredits ?? 0) > 0 && (
-                                        <div className="flex items-center gap-2">
-                                          <Badge variant="secondary" className="font-mono text-sm">
-                                            {subscription.creditsUsed ?? 0} / {subscription.plan.totalCredits}
-                                          </Badge>
-                                          <span className="text-xs text-muted-foreground">créditos usados</span>
-                                        </div>
-                                      )}
-                                    </p>
-
-                                    <div className="text-xs text-muted-foreground">
-                                      <Contact className="h-3 w-3 inline mr-1" />
-                                      {subscription.barber?.name || "Todos os barbeiros"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      <span>Expira em: {formatDate(subscription.endDate)}</span>
-                                      {daysRemaining !== null && (
-                                        <Badge variant={daysRemaining <= 7 ? "destructive" : "default"} className="text-xs ml-2">
-                                          {daysRemaining > 0 ? `${daysRemaining} dias restantes` : daysRemaining === 0 ? "Expira hoje" : "Expirado"}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                            <div className="flex flex-wrap gap-2">
+                              {activeSubscriptions.map((sub) => (
+                                <Badge
+                                  key={sub._id}
+                                  variant="secondary"
+                                  className="bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer border-green-200 py-1.5 px-3 flex items-center gap-2 group transition-all"
+                                  onClick={() => {
+                                    setSelectedSubscriptionForDetails(sub);
+                                    setIsSubscriptionModalOpen(true);
+                                  }}
+                                >
+                                  <CreditCard className="h-3.5 w-3.5" />
+                                  <span className="font-semibold">{sub.plan.name}</span>
+                                  <Info className="h-3.5 w-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                </Badge>
+                              ))}
                             </div>
                           ) : (
-                            <Badge variant="outline">Sem plano</Badge>
+                            <Badge variant="outline" className="text-muted-foreground opacity-60 font-normal">Sem plano ativo</Badge>
                           )}
                         </TableCell>
 
@@ -664,47 +705,59 @@ export function CustomersPage() {
 
                         {/* Célula Ações */}
                         <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleOpenPlanHistoryModal(customer)}>
-                                <History className="h-4 w-4 mr-2" />
-                                Histórico de Planos
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleOpenSubscribeModal(customer)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                {activeSubscriptions.length > 0 ? "Adicionar Novo Plano" : "Atribuir Plano"}
-                              </DropdownMenuItem>
-                              {activeSubscriptions.length > 0 && (
-                                <>
-                                  {activeSubscriptions.map((subscription) => (
-                                    <DropdownMenuItem
-                                      key={subscription._id}
-                                      onClick={() => handleOpenRemovePlanModal(subscription._id, customer._id, subscription.plan.name)}
-                                      className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Remover "{subscription.plan.name}"
-                                    </DropdownMenuItem>
-                                  ))}
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary"
+                              onClick={() => handleOpenBookingsModal(customer)}
+                              title="Ver histórico de agendamentos"
+                            >
+                              <Clock className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => handleOpenPlanHistoryModal(customer)}>
+                                  <History className="h-4 w-4 mr-2" />
+                                  Histórico de Planos
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={() => handleOpenSubscribeModal(customer)}>
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  {activeSubscriptions.length > 0 ? "Adicionar Novo Plano" : "Atribuir Plano"}
+                                </DropdownMenuItem>
+                                {activeSubscriptions.length > 0 && (
+                                  <>
+                                    {activeSubscriptions.map((subscription) => (
+                                      <DropdownMenuItem
+                                        key={subscription._id}
+                                        onSelect={(e) => e.preventDefault()}
+                                        onClick={() => handleOpenRemovePlanModal(subscription._id, customer._id, subscription.plan.name)}
+                                        className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Remover "{subscription.plan.name}"
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">
+                    <TableCell colSpan={8} className="text-center h-48">
                       <div className="flex flex-col items-center justify-center space-y-2">
-                        <User className="h-8 w-8 text-muted-foreground" />
-                        <span className="text-muted-foreground">
+                        <User className="h-10 w-10 text-muted-foreground opacity-20" />
+                        <span className="text-muted-foreground font-medium">
                           {searchTerm || filterStatus !== "all"
                             ? "Nenhum cliente encontrado com os filtros aplicados."
                             : "Nenhum cliente cadastrado ainda."}
@@ -1023,7 +1076,7 @@ export function CustomersPage() {
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="ghost" onClick={() => setIsAssignPlanModalOpen(false)}>
+              <Button variant="ghost">
                 Cancelar
               </Button>
             </DialogClose>
@@ -1215,9 +1268,106 @@ export function CustomersPage() {
           </ScrollArea>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPlanHistoryModalOpen(false)}>
-              Fechar
-            </Button>
+            <DialogClose asChild>
+              <Button variant="outline">
+                Fechar
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Modal de Detalhes da Assinatura */}
+      <Dialog open={isSubscriptionModalOpen} onOpenChange={setIsSubscriptionModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CreditCard className="h-5 w-5 text-green-700" />
+              </div>
+              Detalhes do Plano
+            </DialogTitle>
+            <DialogDescription>
+              Informações detalhadas sobre a assinatura ativa do cliente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedSubscriptionForDetails && (
+            <div className="space-y-6 pt-4">
+              {/* Cabeçalho do Plano */}
+              <div className="p-4 bg-muted/30 rounded-xl border border-border/50">
+                <h3 className="text-lg font-bold text-foreground">{selectedSubscriptionForDetails.plan.name}</h3>
+                <Badge className="mt-1 bg-green-500 hover:bg-green-600">Assinatura Ativa</Badge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {/* Barbeiro Vinculado */}
+                <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                  <div className="p-2 bg-blue-100 rounded-md">
+                    <User className="h-4 w-4 text-blue-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider text-[10px]">Barbeiro do Plano</p>
+                    <p className="text-base font-semibold">{selectedSubscriptionForDetails.barber?.name || "Todos os barbeiros"}</p>
+                  </div>
+                </div>
+
+                {/* Validade */}
+                <div className="flex items-start gap-3 p-3 rounded-lg border bg-card">
+                  <div className="p-2 bg-orange-100 rounded-md">
+                    <CalendarDays className="h-4 w-4 text-orange-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider text-[10px]">Expira em</p>
+                    <p className="text-base font-semibold">{formatDate(selectedSubscriptionForDetails.endDate)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Faltam {getDaysRemaining(selectedSubscriptionForDetails.endDate)} dias
+                    </p>
+                  </div>
+                </div>
+
+                {/* Créditos/Serviços */}
+                <div className="p-4 rounded-lg border bg-card space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-purple-100 rounded">
+                        <Scissors className="h-4 w-4 text-purple-700" />
+                      </div>
+                      <span className="font-semibold text-sm">Controle de Créditos</span>
+                    </div>
+                    <span className="text-sm font-bold">{selectedSubscriptionForDetails.creditsUsed || 0} / {selectedSubscriptionForDetails.plan.totalCredits || 0}</span>
+                  </div>
+
+                  {/* Barra de Progresso Visualizada */}
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-purple-600 h-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, ((selectedSubscriptionForDetails.creditsUsed || 0) / (selectedSubscriptionForDetails.plan.totalCredits || 1)) * 100)}%`
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="text-center p-2 bg-muted/40 rounded-md">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Serviços usados</p>
+                      <p className="text-xl font-bold text-purple-700">{selectedSubscriptionForDetails.creditsUsed || 0}</p>
+                    </div>
+                    <div className="text-center p-2 bg-muted/40 rounded-md">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Ainda possui</p>
+                      <p className="text-xl font-bold text-green-600">{selectedSubscriptionForDetails.creditsRemaining || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-6">
+            <DialogClose asChild>
+              <Button variant="outline" className="w-full">
+                Fechar
+              </Button>
+            </DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>

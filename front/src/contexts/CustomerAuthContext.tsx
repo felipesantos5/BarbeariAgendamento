@@ -6,6 +6,8 @@ interface Customer {
   _id: string;
   name: string;
   phone: string;
+  email?: string;
+  birthDate?: string;
 }
 
 interface CustomerAuthContextType {
@@ -15,6 +17,7 @@ interface CustomerAuthContextType {
   isLoading: boolean;
   login: (token: string, customerData: Customer) => void;
   logout: () => void;
+  updateCustomerData: (data: Partial<Customer>) => void;
 }
 
 const CustomerAuthContext = createContext<CustomerAuthContextType | undefined>(undefined);
@@ -48,8 +51,16 @@ export const CustomerAuthProvider = ({ children }: { children: ReactNode }) => {
     setCustomer(null);
   };
 
+  const updateCustomerData = (data: Partial<Customer>) => {
+    if (customer) {
+      const updated = { ...customer, ...data };
+      setCustomer(updated);
+      localStorage.setItem("customerUser", JSON.stringify(updated));
+    }
+  };
+
   return (
-    <CustomerAuthContext.Provider value={{ token, customer, isAuthenticated: !!token, isLoading, login, logout }}>
+    <CustomerAuthContext.Provider value={{ token, customer, isAuthenticated: !!token, isLoading, login, logout, updateCustomerData }}>
       {children}
     </CustomerAuthContext.Provider>
   );

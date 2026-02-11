@@ -30,10 +30,12 @@ import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
 import { SuperAdminBillingPage } from "./pages/superadmin/SuperAdminBillingPage";
 import { SuperAdminExpensesPage } from "./pages/superadmin/SuperAdminExpensesPage";
+import { Toaster } from "sonner";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors />
       <Routes>
         {/* Super Admin Routes */}
         <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />

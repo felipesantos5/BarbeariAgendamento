@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eye, EyeOff, Loader2, Webhook, ExternalLink, Copy, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Webhook, ExternalLink, Copy, CheckCircle2, ShieldCheck, Info, PlayCircle } from "lucide-react";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
 import { API_BASE_URL } from "@/config/BackendUrl";
 
@@ -172,175 +172,206 @@ export const CheckoutConfigPage = () => {
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-6">
-          {/* Switch para ativar/desativar checkout */}
-          <div className="flex items-center justify-between rounded-lg border p-4 shadow-sm">
-            <div className="space-y-0.5">
-              <Label htmlFor="payments-enabled" className="text-base font-semibold">
-                Ativar checkout online
-              </Label>
-              <CardDescription>
-                Permitir que clientes paguem pelo agendamento diretamente no site.
-              </CardDescription>
-            </div>
-            <Switch
-              id="payments-enabled"
-              checked={formData.paymentsEnabled || false}
-              onCheckedChange={handlePaymentEnabledChange}
-            />
-          </div>
-
-          {/* Bloco condicional que só aparece se os pagamentos estiverem ativos */}
-          {formData.paymentsEnabled && (
-            <div className="space-y-4 pl-4 border-l-2 border-primary/50 pt-2 pb-2">
-              {/* Switch para tornar pagamento obrigatório */}
-              <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-background">
+        <CardContent className="space-y-8">
+          {/* SEÇÃO 1: STATUS DO CHECKOUT */}
+          <section className="space-y-4">
+            {/* <div className="flex items-center gap-2 text-primary font-semibold">
+              <CreditCard className="h-5 w-5" />
+              <h3>Status e Preferências</h3>
+            </div> */}
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between rounded-xl border p-4 bg-muted/30 shadow-sm transition-all">
                 <div className="space-y-0.5">
-                  <Label htmlFor="requireOnlinePayment" className="font-medium">
-                    Tornar pagamento OBRIGATÓRIO?
+                  <Label htmlFor="payments-enabled" className="text-base font-bold">
+                    Ativar Checkout Online
                   </Label>
-                  <CardDescription className="text-xs">
-                    Se ativo, o cliente DEVERÁ pagar online para concluir o agendamento.
-                  </CardDescription>
+                  <p className="text-sm text-muted-foreground">
+                    Habilita pagamentos via Mercado Pago no seu site.
+                  </p>
                 </div>
                 <Switch
-                  id="requireOnlinePayment"
-                  checked={formData.requireOnlinePayment || false}
-                  onCheckedChange={handlePaymentMandatoryChange}
+                  id="payments-enabled"
+                  checked={formData.paymentsEnabled || false}
+                  onCheckedChange={handlePaymentEnabledChange}
                 />
               </div>
 
-              {/* Campo para o Access Token do Mercado Pago */}
-              <div className="space-y-2 flex flex-col pt-4">
-                <Label htmlFor="mercadoPagoAccessToken">Access Token do Mercado Pago</Label>
-                <div className="relative">
-                  <Input
-                    id="mercadoPagoAccessToken"
-                    name="mercadoPagoAccessToken"
-                    type={showToken ? "text" : "password"}
-                    value={formData.mercadoPagoAccessToken || ""}
-                    onChange={handleInputChange}
-                    placeholder="Cole seu Access Token aqui"
-                    className="pr-10"
+              {formData.paymentsEnabled && (
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-background shadow-sm border-l-4 border-l-primary animate-in fade-in slide-in-from-left-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="requireOnlinePayment" className="text-base font-bold">
+                      Pagamento Obrigatório
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      O agendamento só será confirmado após o pagamento aprovado.
+                    </p>
+                  </div>
+                  <Switch
+                    id="requireOnlinePayment"
+                    checked={formData.requireOnlinePayment || false}
+                    onCheckedChange={handlePaymentMandatoryChange}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute inset-y-0 right-0 h-full px-3"
-                    onClick={() => setShowToken(!showToken)}
-                    aria-label={showToken ? "Esconder token" : "Mostrar token"}
-                  >
-                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
                 </div>
-
-                {/* Links úteis */}
-                <div className="space-y-1 mt-2">
-                  <a
-                    className="text-xs text-gray-700 underline block"
-                    href="https://www.mercadopago.com.br/settings/account/applications/create-app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Clique aqui para criar sua conta no Mercado Pago
-                  </a>
-                  <a
-                    className="text-xs text-gray-700 underline block"
-                    href="https://youtu.be/341Dptvsov0"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Video de tutorial explicativo
-                  </a>
-                </div>
-              </div>
-
-              {/* Campo para a Webhook Secret */}
-              <div className="space-y-2 flex flex-col pt-4">
-                <Label htmlFor="mercadoPagoWebhookSecret">Assinatura Secreta do Webhook (Opcional)</Label>
-                <div className="relative">
-                  <Input
-                    id="mercadoPagoWebhookSecret"
-                    name="mercadoPagoWebhookSecret"
-                    type={showWebhookSecret ? "text" : "password"}
-                    value={formData.mercadoPagoWebhookSecret || ""}
-                    onChange={handleInputChange}
-                    placeholder="Cole a assinatura secreta gerada pelo Mercado Pago"
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute inset-y-0 right-0 h-full px-3"
-                    onClick={() => setShowWebhookSecret(!showWebhookSecret)}
-                    aria-label={showWebhookSecret ? "Esconder secret" : "Mostrar secret"}
-                  >
-                    {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  A assinatura secreta é gerada automaticamente quando você configura o webhook no painel do Mercado Pago.
-                  Cole ela aqui para validar a autenticidade das notificações e aumentar a segurança.
-                </p>
-              </div>
+              )}
             </div>
+          </section>
+
+          {formData.paymentsEnabled && (
+            <>
+              {/* SEÇÃO 2: CREDENCIAIS */}
+              <section className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="flex items-center gap-2 text-primary font-semibold">
+                  <ShieldCheck className="h-5 w-5" />
+                  <h3>Conexão com Mercado Pago</h3>
+                </div>
+
+                <div className="space-y-4 rounded-xl border p-6 bg-muted/10">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="mercadoPagoAccessToken" className="font-bold flex items-center gap-2">
+                        Access Token
+                        <span title="É a chave mestra que permite o sistema criar pagamentos na sua conta do Mercado Pago.">
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </span>
+                      </Label>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="mercadoPagoAccessToken"
+                        name="mercadoPagoAccessToken"
+                        type={showToken ? "text" : "password"}
+                        value={formData.mercadoPagoAccessToken || ""}
+                        onChange={handleInputChange}
+                        placeholder="Ex: APP_USR-..."
+                        className="pr-10 h-11"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute inset-y-0 right-0 h-full px-3"
+                        onClick={() => setShowToken(!showToken)}
+                      >
+                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="text-xs h-8 gap-2"
+                    >
+                      <a href="https://www.mercadopago.com.br/settings/account/applications/create-app" target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-3 w-3" />
+                        Criar Conta Mercado Pago
+                      </a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="text-xs h-8 gap-2 border-red-200 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <a href="https://youtu.be/341Dptvsov0" target="_blank" rel="noopener noreferrer">
+                        <PlayCircle className="h-3 w-3" />
+                        Vídeo Tutorial
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </section>
+
+              {/* SEÇÃO 3: SEGURANÇA E WEBHOOK */}
+              <section className="space-y-4 animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex items-center gap-2 text-primary font-semibold">
+                  <Webhook className="h-5 w-5" />
+                  <h3>Segurança e Sincronização</h3>
+                </div>
+
+                <div className="space-y-6 rounded-xl border p-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="mercadoPagoWebhookSecret" className="font-bold flex items-center gap-2">
+                      Assinatura Secreta (Recomendado)
+                      <span title="Chave de segurança que valida se o aviso de pagamento veio realmente do Mercado Pago, evitando fraudes.">
+                        <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="mercadoPagoWebhookSecret"
+                        name="mercadoPagoWebhookSecret"
+                        type={showWebhookSecret ? "text" : "password"}
+                        value={formData.mercadoPagoWebhookSecret || ""}
+                        onChange={handleInputChange}
+                        placeholder="Cole a assinatura secreta aqui"
+                        className="pr-10 h-11"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute inset-y-0 right-0 h-full px-3"
+                        onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                      >
+                        {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50/50 dark:bg-green-950/10 p-5 rounded-lg border border-green-100 space-y-3">
+                    <div className="flex items-center gap-2 font-semibold text-green-800 dark:text-green-300">
+                      <Webhook className="h-4 w-4" />
+                      <h4>Configurar Webhook</h4>
+                    </div>
+                    <p className="text-sm text-green-700 dark:text-green-200 leading-relaxed">
+                      Necessário para que o sistema saiba automaticamente quando um pagamento foi aprovado ou um plano renovado.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={handleSetupWebhook}
+                      disabled={isSettingUpWebhook}
+                      className="bg-green-600 hover:bg-green-700 shadow-md transition-all active:scale-95"
+                    >
+                      {isSettingUpWebhook ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Webhook className="mr-2 h-4 w-4" />
+                      )}
+                      Ver Passo a Passo de Configuração
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            </>
           )}
 
-          {/* Instruções */}
-          <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
-            <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">
-              Como Funciona
-            </legend>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
-              <li>Crie ou acesse sua conta no Mercado Pago através do link acima</li>
-              <li>Gere um Access Token nas configurações da sua conta</li>
-              <li>Cole o token no campo acima e ative o checkout online</li>
-              <li>Seus clientes poderão pagar pelos agendamentos diretamente no site</li>
-            </ol>
-          </fieldset>
-
-          {/* Gerenciamento de Webhooks */}
-          {formData.paymentsEnabled && formData.mercadoPagoAccessToken && (
-            <fieldset className="border p-4 rounded-md bg-green-50/50 dark:bg-green-950/20">
-              <legend className="text-lg font-semibold px-2 text-green-900 dark:text-green-100">
-                Configuração de Webhooks (Assinaturas)
-              </legend>
-              <div className="space-y-3 mt-2">
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Webhooks são necessários para que o sistema de assinaturas recorrentes funcione automaticamente.
-                  Configure uma vez no painel do Mercado Pago e o sistema receberá notificações sobre pagamentos e renovações.
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 p-2 rounded border border-amber-200">
-                  <strong>Importante:</strong> A configuração de webhooks deve ser feita manualmente no painel de desenvolvedor do Mercado Pago.
-                  Clique no botão abaixo para ver as instruções passo a passo e copiar a URL necessária.
-                </p>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSetupWebhook}
-                    disabled={isSettingUpWebhook}
-                    className="gap-2"
-                  >
-                    {isSettingUpWebhook ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Configurando...
-                      </>
-                    ) : (
-                      <>
-                        <Webhook className="h-4 w-4" />
-                        Ver Instruções de Webhook
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </fieldset>
+          {/* AJUDA RÁPIDA */}
+          {!formData.paymentsEnabled && (
+            <div className="rounded-xl border p-6 bg-blue-50/30 dark:bg-blue-950/5">
+              <h4 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2 mb-3">
+                <Info className="h-4 w-4" />
+                Como começar?
+              </h4>
+              <ul className="space-y-3 text-sm text-blue-800 dark:text-blue-300">
+                <li className="flex gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-blue-800 text-[10px] font-bold">1</span>
+                  Crie sua conta ou use uma existente no Mercado Pago.
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-blue-800 text-[10px] font-bold">2</span>
+                  Obtenha seu <strong>Access Token</strong> nas configurações de desenvolvedor.
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-200 text-blue-800 text-[10px] font-bold">3</span>
+                  Ative o botão acima e cole o seu token.
+                </li>
+              </ul>
+            </div>
           )}
         </CardContent>
 

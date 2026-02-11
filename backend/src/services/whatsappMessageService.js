@@ -1,7 +1,10 @@
 import Barbershop from "../models/Barbershop.js";
 import { sendWhatsAppConfirmation } from "./evolutionWhatsapp.js";
 import axios from "axios";
+import { sendDiscordNotification, createReminderLogEmbed } from "./discordService.js";
+import { getRedisClient } from "../config/redis.js";
 
+const DISCORD_LOGS_WEBHOOK_URL = process.env.DISCORD_LOGS_WEBHOOK_URL;
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL;
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 
@@ -20,9 +23,10 @@ export async function sendWhatsAppMessage(barbershopId, customerPhone, message) 
       barbershop?.whatsappConfig?.connectionStatus === "connected" &&
       barbershop?.whatsappConfig?.instanceName;
 
+    let result;
     if (hasOwnWhatsApp) {
       // Usar instância da barbearia
-      return await sendViaInstance(
+      result = await sendViaInstance(
         barbershop.whatsappConfig.instanceName,
         customerPhone,
         message,
@@ -30,10 +34,40 @@ export async function sendWhatsAppMessage(barbershopId, customerPhone, message) 
       );
     } else {
       // Fallback: usar instância padrão
-      return await sendWhatsAppConfirmation(customerPhone, message);
+      result = await sendWhatsAppConfirmation(customerPhone, message);
     }
+
+    // Incrementar estatísticas no Redis (Task em background)
+    getRedisClient().then(redis => {
+      if (redis) {
+        redis.incr("stats:daily:whatsapp_attempts");
+        if (result && result.success) {
+          redis.incr("stats:daily:whatsapp_successes");
+        }
+      }
+    }).catch(err => console.error("[Stats] Erro ao atualizar Redis:", err.message));
+
+    return result;
   } catch (error) {
     console.error("[WhatsAppRouter] Erro ao rotear mensagem:", error);
+    
+    // Incrementar falha no Redis
+    getRedisClient().then(redis => {
+      if (redis) redis.incr("stats:daily:whatsapp_attempts");
+    }).catch(() => {});
+
+    // Log de erro no Discord (mantido apenas para erros críticos de roteamento)
+    if (DISCORD_LOGS_WEBHOOK_URL) {
+      sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+        "⚠️ Erro Crítico ao Rotear WhatsApp",
+        15548997, // Red
+        [
+          { name: "Erro", value: error.message, inline: false },
+          { name: "Telefone", value: customerPhone, inline: true }
+        ]
+      )).catch(() => {});
+    }
+
     // Em caso de erro, tenta fallback para instância padrão
     return await sendWhatsAppConfirmation(customerPhone, message);
   }

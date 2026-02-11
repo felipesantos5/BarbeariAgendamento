@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import compression from "compression";
 import "dotenv/config";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -40,6 +41,7 @@ import billingRoutes from "./routes/billingRoutes.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
+import { globalLimiter } from "./middleware/rateLimiting.js";
 
 import { stopAllCronJobs } from "./services/schedulerService.js";
 
@@ -86,6 +88,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+app.use(compression()); // Gzip compression
+app.use(globalLimiter); // DDoS Protection
 
 app.use(helmet());
 app.use(cookieParser());

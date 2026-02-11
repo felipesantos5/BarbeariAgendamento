@@ -350,7 +350,7 @@ router.put(
 
             // Notifica o cliente
             const rewardMsg = barbershop.loyaltyProgram.rewardDescription;
-            const message = `Parabéns, ${customer.name}! 🎁\n\nVocê completou nosso cartão fidelidade e acaba de ganhar: *${rewardMsg}*!\n\nUse no seu próximo agendamento na ${barbershop.name}. 💈`;
+            const message = `Parabéns, ${customer.name}! 🎁\n\nVocê completou nosso cartão fidelidade e acaba de ganhar: *${rewardMsg}*!\n\nUse no seu próximo agendamento na ${barbershop.name}. 💈\n\nPara resgatar seu prêmio, basta informar ao barbeiro no seu próximo atendimento para que ele valide e aplique seu bônus no sistema.`;
             sendWhatsAppMessage(barbershopId, customer.phone, message);
           }
 

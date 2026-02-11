@@ -8,6 +8,11 @@ import { startOfDay, endOfDay, getHours } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { format } from "date-fns";
 import { sendAutomatedReturnReminders } from "./returnReminderService.js";
+import { sendDiscordNotification, createReminderLogEmbed } from "./discordService.js";
+import { getRedisClient } from "../config/redis.js";
+
+const DISCORD_LOGS_WEBHOOK_URL = process.env.DISCORD_LOGS_WEBHOOK_URL;
+
 
 const BRAZIL_TZ = "America/Sao_Paulo";
 
@@ -42,8 +47,19 @@ const sendDailyReminders = async (triggerHour) => {
 
     if (bookings.length === 0) {
       console.log(`-> Nenhum agendamento encontrado para hoje.`);
+      await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+        `📅 Lembretes Diários - ${triggerHour}h`,
+        16776960, // Yellow
+        [{ name: "Status", value: "Nenhum agendamento encontrado para hoje.", inline: false }]
+      ));
       return;
     }
+
+    await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+      `🔔 Iniciando Envio de Lembretes - ${triggerHour}h`,
+      3447003, // Blue
+      [{ name: "Agendamentos Encontrados", value: bookings.length.toString(), inline: true }]
+    ));
 
     let sentCount = 0;
 
@@ -93,16 +109,65 @@ const sendDailyReminders = async (triggerHour) => {
 
       // Pausa aleatória entre mensagens (apenas se não estiver bloqueado)
       if (!result.blocked) {
-        const MIN_DELAY = 5000;
-        const MAX_DELAY = 15000;
+        const MIN_DELAY = 20000; // 20 segundos
+        const MAX_DELAY = 45000; // 45 segundos
         const randomDelay = Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
         await delay(randomDelay);
       }
     }
 
     console.log(`[CRON] Lembretes enviados: ${sentCount}/${bookings.length}`);
+
+    await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+      `✅ Lembretes Finalizados - ${triggerHour}h`,
+      5763719, // Green
+      [
+        { name: "Total", value: bookings.length.toString(), inline: true },
+        { name: "Enviados", value: sentCount.toString(), inline: true },
+        { name: "Falhas/Ignorados", value: (bookings.length - sentCount).toString(), inline: true }
+      ]
+    ));
   } catch (error) {
     console.error(`[CRON] Erro ao enviar lembretes de agendamento (trigger: ${triggerHour}):`, error.message);
+    await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+      `❌ Erro no Processo de Lembretes - ${triggerHour}h`,
+      15548997, // Red
+      [{ name: "Erro", value: error.message, inline: false }]
+    ));
+  }
+};
+
+const sendDailyStatsSummary = async () => {
+  console.log(`[${new Date().toLocaleTimeString()}] Gerando resumo diário de envios...`);
+  try {
+    const redis = await getRedisClient();
+    if (!redis) return;
+
+    const attempts = await redis.get("stats:daily:whatsapp_attempts") || 0;
+    const successes = await redis.get("stats:daily:whatsapp_successes") || 0;
+    const failures = Math.max(0, parseInt(attempts) - parseInt(successes));
+
+    if (parseInt(attempts) === 0) {
+      console.log("[CRON] Nenhuma mensagem enviada hoje. Pulando resumo do Discord.");
+      return;
+    }
+
+    await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+      "📊 Resumo Geral do Dia - WhatsApp",
+      11468718, // Purple
+      [
+        { name: "Tentativas Totais", value: attempts.toString(), inline: true },
+        { name: "Sucesso", value: successes.toString(), inline: true },
+        { name: "Falhas", value: failures.toString(), inline: true }
+      ]
+    ));
+
+    // Resetar para o próximo dia
+    await redis.del("stats:daily:whatsapp_attempts");
+    await redis.del("stats:daily:whatsapp_successes");
+    console.log("[CRON] Resumo diário enviado e estatísticas resetadas.");
+  } catch (error) {
+    console.error("[CRON] Erro ao gerar resumo diário:", error.message);
   }
 };
 
@@ -121,7 +186,7 @@ const updateExpiredBookings = async () => {
           paymentStatus: {
             $cond: {
               if: { $in: ["$paymentStatus", ["pending", "no-payment"]] },
-              then: "approved",
+              then: "paid_locally",
               else: "$paymentStatus",
             },
           },
@@ -222,6 +287,19 @@ cronTasks.push(
     "0 * * * *",
     () => {
       updateExpiredBookings();
+    },
+    {
+      scheduled: true,
+      timezone: "America/Sao_Paulo",
+    }
+  )
+);
+
+cronTasks.push(
+  cron.schedule(
+    "0 22 * * *",
+    () => {
+      sendDailyStatsSummary();
     },
     {
       scheduled: true,

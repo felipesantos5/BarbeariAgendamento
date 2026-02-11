@@ -62,7 +62,7 @@ interface Subscription {
   endDate: string;
 }
 
-type TabId = "agendamentos" | "planos";
+type TabId = "agendamentos" | "planos" | "conta";
 
 export function MyBookingsPage() {
   const { customer, logout } = useCustomerAuth();
@@ -75,6 +75,13 @@ export function MyBookingsPage() {
   const [bookingToReschedule, setBookingToReschedule] = useState<PopulatedBooking | null>(null);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("agendamentos");
+  const { updateCustomerData } = useCustomerAuth();
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: customer?.name || "",
+    email: customer?.email || "",
+    birthDate: customer?.birthDate ? format(new Date(customer.birthDate), "yyyy-MM-dd") : "",
+  });
 
   // Atualizar título da página
   useDocumentTitle("Meus Agendamentos - Barbearia Agendamento");
@@ -256,7 +263,7 @@ export function MyBookingsPage() {
           <div className="flex border-b-0">
             <button
               onClick={() => setActiveTab("agendamentos")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "agendamentos"
+              className={`w-1/2 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "agendamentos"
                 ? "border-gray-900 text-gray-900 dark:border-white dark:text-white"
                 : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
@@ -271,18 +278,28 @@ export function MyBookingsPage() {
             </button>
             <button
               onClick={() => setActiveTab("planos")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "planos"
+              className={`w-1/4 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "planos"
                 ? "border-gray-900 text-gray-900 dark:border-white dark:text-white"
                 : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
             >
               <Package className="h-4 w-4" />
-              <span>Meus Planos</span>
+              <span>Planos</span>
               {activeSubscriptionsCount > 0 && (
                 <span className="bg-green-100 text-green-800 text-xs font-semibold px-2 py-0.5 rounded-full">
                   {activeSubscriptionsCount}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab("conta")}
+              className={`w-1/4 flex items-center justify-center gap-2 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === "conta"
+                ? "border-gray-900 text-gray-900 dark:border-white dark:text-white"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              <User className="h-4 w-4" />
+              <span>Conta</span>
             </button>
           </div>
         </div>
@@ -315,7 +332,7 @@ export function MyBookingsPage() {
                       (booking.status === "pending_payment" || booking.status === "booked");
                     const showPaiedBadge =
                       booking.barbershop.paymentsEnabled === true &&
-                      booking.paymentStatus === "approved" &&
+                      (booking.paymentStatus === "approved" || booking.paymentStatus === "paid_locally") &&
                       booking.status !== "canceled";
                     const canBeRescheduled = booking.status === "booked" || booking.status === "confirmed";
 
@@ -771,6 +788,88 @@ export function MyBookingsPage() {
                 </p>
               </div>
             )}
+          </section>
+        )}
+
+        {/* TAB: Minha Conta */}
+        {activeTab === "conta" && (
+          <section className="space-y-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Meus Dados
+            </h2>
+
+            <Card className="p-6 bg-white dark:bg-gray-800 shadow-sm border space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Telefone (Login)</label>
+                <div className="p-2.5 bg-gray-50 dark:bg-gray-900/50 rounded-md border text-gray-500 flex items-center gap-2">
+                  <Clock size={16} /> {customer?.phone}
+                  <span className="text-[10px] ml-auto bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded leading-none">Somente Leitura</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300">Nome completo</label>
+                <input
+                  id="name"
+                  type="text"
+                  value={profileData.name}
+                  onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                  className="w-full p-2.5 bg-white dark:bg-gray-900/10 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all dark:text-white"
+                  placeholder="Seu nome"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="email" className="text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={profileData.email}
+                  onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                  className="w-full p-2.5 bg-white dark:bg-gray-900/10 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all dark:text-white"
+                  placeholder="exemplo@email.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="birthDate" className="text-sm font-medium text-gray-700 dark:text-gray-300">Data de Nascimento</label>
+                <input
+                  id="birthDate"
+                  type="date"
+                  value={profileData.birthDate}
+                  onChange={(e) => setProfileData({ ...profileData, birthDate: e.target.value })}
+                  className="w-full p-2.5 bg-white dark:bg-gray-900/10 border rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all dark:text-white"
+                />
+              </div>
+
+              <Button
+                className="w-full mt-2"
+                disabled={isUpdatingProfile}
+                onClick={async () => {
+                  setIsUpdatingProfile(true);
+                  try {
+                    const response = await apiClient.put("/api/auth/customer/update-profile", profileData);
+                    updateCustomerData(response.data.customer);
+                    toast.success("Perfil atualizado com sucesso!");
+                  } catch (error) {
+                    toast.error("Erro ao atualizar perfil.");
+                  } finally {
+                    setIsUpdatingProfile(false);
+                  }
+                }}
+              >
+                {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Alterações
+              </Button>
+            </Card>
+
+            <div className="text-center">
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:bg-red-50">
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair da Minha Conta
+              </Button>
+            </div>
           </section>
         )}
       </main>

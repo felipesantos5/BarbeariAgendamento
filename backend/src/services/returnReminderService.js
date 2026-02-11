@@ -7,6 +7,10 @@ import { sendWhatsAppConfirmation } from "./evolutionWhatsapp.js";
 import { sendWhatsAppMessage } from "./whatsappMessageService.js";
 import { subDays, startOfDay, startOfMonth } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { sendDiscordNotification, createReminderLogEmbed } from "./discordService.js";
+
+const DISCORD_LOGS_WEBHOOK_URL = process.env.DISCORD_LOGS_WEBHOOK_URL;
+
 
 const BRAZIL_TZ = "America/Sao_Paulo";
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -122,6 +126,15 @@ export const sendAutomatedReturnReminders = async () => {
     }).select("name slug"); // ✅ Busca o slug
 
     console.log(`-> Encontradas ${barbershopsToNotify.length} barbearias com lembretes automáticos ativos.`); //
+    
+    if (barbershopsToNotify.length > 0) {
+      await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
+        "🔄 Iniciando Lembretes de Retorno",
+        3447003, // Blue
+        [{ name: "Barbearias Ativas", value: barbershopsToNotify.length.toString(), inline: true }]
+      ));
+    }
+
 
     for (const barbershop of barbershopsToNotify) {
       // --- 3. USA OS DIAS FIXOS ---
@@ -166,7 +179,10 @@ export const sendAutomatedReturnReminders = async () => {
 
         // Pausa entre mensagens (apenas se não estiver bloqueado)
         if (!result.blocked) {
-          await delay(5000 + Math.random() * 5000);
+          const MIN_DELAY = 20000; // 20 segundos
+          const MAX_DELAY = 45000; // 45 segundos
+          const randomDelay = Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
+          await delay(randomDelay);
         }
       }
 

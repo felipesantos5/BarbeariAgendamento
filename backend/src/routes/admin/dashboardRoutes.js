@@ -614,9 +614,9 @@ router.get("/", async (req, res) => {
     const totalServiceCommission = combinedBarberPerformance.reduce((sum, barber) => sum + (barber.totalServiceCommission || 0), 0);
     const totalGrossRevenue = overviewData.totalRevenue + globalPlanData.totalPlanRevenue + globalProductData.totalGrossRevenue;
     const totalCommissionsPaid = totalServiceCommission + globalPlanData.totalPlanCommission + globalProductData.totalProductCommission;
-    const totalCostOfGoods = globalProductData.totalCostOfGoods;
+    const totalPurchaseCost = stockEntryData.totalPurchaseCost; // ✅ Nova constante para clareza
     const totalOperationalCosts = operationalCostsData.totalOperationalCosts;
-    const totalExpenses = totalCostOfGoods + totalOperationalCosts;
+    const totalExpenses = totalPurchaseCost + totalOperationalCosts; // ✅ AGORA USA A COMPRA DE PRODUTOS
     const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalExpenses;
 
     // --- 5.1 Estatísticas de Planos ---
@@ -659,7 +659,7 @@ router.get("/", async (req, res) => {
 
         // Despesas (Compra de Produtos + Custos Operacionais)
         totalExpenses: totalExpenses,
-        totalCostOfGoods: totalCostOfGoods,
+        totalCostOfGoods: totalPurchaseCost,
         totalOperationalCosts: totalOperationalCosts,
 
         // Faturamento Líquido

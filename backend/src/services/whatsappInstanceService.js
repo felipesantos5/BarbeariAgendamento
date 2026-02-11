@@ -227,7 +227,6 @@ export async function getQRCode(instanceName) {
  */
 export async function getConnectionStatus(instanceName) {
   try {
-    console.log(`[WhatsApp] Verificando status da instância: ${instanceName}`);
 
     // Tenta primeiro o endpoint fetchInstances que retorna informações mais completas
     let data = null;

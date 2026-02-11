@@ -15,7 +15,6 @@ import {
   DollarSign,
   TrendingDown,
   TrendingUp,
-  Calendar,
   RefreshCw,
   AlertCircle,
   Plus,

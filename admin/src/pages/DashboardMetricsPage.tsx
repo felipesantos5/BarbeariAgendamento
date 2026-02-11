@@ -754,7 +754,7 @@ export default function DashboardMetricsPage() {
                     title="Cancelados"
                     value={data.generalMetrics.canceledBookings}
                     icon={ClipboardX}
-                    description={`${data.generalMetrics.cancellationRate.toFixed(1)}% taxa`}
+                    description={`${data.generalMetrics.cancellationRate.toFixed(1)}% taxa de cancelamento`}
                     valueClassName="text-red-600"
                   />
                   <MetricCard
@@ -774,91 +774,97 @@ export default function DashboardMetricsPage() {
                 </div>
               </div>
 
-              <Separator className="my-6" />
+              {/* Grupo de Planos e Assinaturas - Esconde se não houver dados */}
+              {(data.planStats.activePlans > 0 || data.planStats.newPlansSold > 0 || data.planStats.bookingsWithPlans > 0) && (
+                <>
+                  <Separator className="my-6" />
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                      <Package size={20} /> Planos e Assinaturas
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+                      <MetricCard
+                        title="Planos Ativos"
+                        value={data.planStats.activePlans}
+                        icon={Package}
+                        description="Assinaturas ativas no período"
+                        valueClassName="text-blue-600"
+                      />
+                      <MetricCard
+                        title="Novos Planos"
+                        value={data.planStats.newPlansSold}
+                        icon={PackagePlus}
+                        description="Planos vendidos no período"
+                        valueClassName="text-green-600"
+                      />
+                      <MetricCard
+                        title="Receita de Planos"
+                        value={PriceFormater(data.planStats.planRevenue)}
+                        icon={DollarSign}
+                        description="Valor total gerado"
+                        valueClassName="text-emerald-600"
+                      />
+                      <MetricCard
+                        title="Agendamentos com Planos"
+                        value={data.planStats.bookingsWithPlans}
+                        icon={ClipboardCheck}
+                        description="Atendimentos de clientes com planos"
+                        valueClassName="text-purple-600"
+                      />
+                      <MetricCard
+                        title="Taxa de Utilização"
+                        value={`${data.planStats.usageRate.toFixed(1)}%`}
+                        icon={BadgePercent}
+                        description="% de agendamentos com planos"
+                        valueClassName="text-indigo-600"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* Grupo de Planos e Assinaturas */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                  <Package size={20} /> Planos e Assinaturas
-                </h3>
-                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-                  <MetricCard
-                    title="Planos Ativos"
-                    value={data.planStats.activePlans}
-                    icon={Package}
-                    description="Assinaturas ativas no período"
-                    valueClassName="text-blue-600"
-                  />
-                  <MetricCard
-                    title="Novos Planos"
-                    value={data.planStats.newPlansSold}
-                    icon={PackagePlus}
-                    description="Planos vendidos no período"
-                    valueClassName="text-green-600"
-                  />
-                  <MetricCard
-                    title="Receita de Planos"
-                    value={PriceFormater(data.planStats.planRevenue)}
-                    icon={DollarSign}
-                    description="Valor total gerado"
-                    valueClassName="text-emerald-600"
-                  />
-                  <MetricCard
-                    title="Agendamentos com Planos"
-                    value={data.planStats.bookingsWithPlans}
-                    icon={ClipboardCheck}
-                    description="Atendimentos de clientes com planos"
-                    valueClassName="text-purple-600"
-                  />
-                  <MetricCard
-                    title="Taxa de Utilização"
-                    value={`${data.planStats.usageRate.toFixed(1)}%`}
-                    icon={BadgePercent}
-                    description="% de agendamentos com planos"
-                    valueClassName="text-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <Separator className="my-6" />
-
-              {/* Grupo de Movimentação de Estoque */}
-              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                  <ShoppingCart size={20} /> Movimentação de Estoque
-                </h3>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <MetricCard
-                    title="Produtos Vendidos"
-                    value={data.stockMovement.totalProductsSold}
-                    icon={ShoppingCart}
-                    description="Unidades vendidas no período"
-                    valueClassName="text-blue-600"
-                  />
-                  <MetricCard
-                    title="Produtos Comprados"
-                    value={PriceFormater(data.stockMovement.totalPurchaseCost)}
-                    icon={PackagePlus}
-                    description={`${data.stockMovement.totalProductsPurchased} unidades`}
-                    valueClassName="text-orange-600"
-                  />
-                  <MetricCard
-                    title="Receita de Produtos"
-                    value={PriceFormater(data.stockMovement.totalSalesRevenue)}
-                    icon={DollarSign}
-                    description="Valor bruto de vendas"
-                    valueClassName="text-green-600"
-                  />
-                  <MetricCard
-                    title="Lucro Líquido"
-                    value={PriceFormater(data.stockMovement.netProductRevenue)}
-                    icon={TrendingUp}
-                    description="Receita - Custo dos produtos"
-                    valueClassName="text-emerald-600"
-                    className="bg-emerald-50 border-emerald-200"
-                  />
-                </div>
-              </div>
+              {/* Grupo de Movimentação de Estoque - Esconde se não houver dados */}
+              {(data.stockMovement.totalProductsSold > 0 || data.stockMovement.totalProductsPurchased > 0) && (
+                <>
+                  <Separator className="my-6" />
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                      <ShoppingCart size={20} /> Movimentação de Estoque
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                      <MetricCard
+                        title="Produtos Vendidos"
+                        value={data.stockMovement.totalProductsSold}
+                        icon={ShoppingCart}
+                        description="Unidades vendidas no período"
+                        valueClassName="text-blue-600"
+                      />
+                      <MetricCard
+                        title="Produtos Comprados"
+                        value={PriceFormater(data.stockMovement.totalPurchaseCost)}
+                        icon={PackagePlus}
+                        description={`${data.stockMovement.totalProductsPurchased} unidades`}
+                        valueClassName="text-orange-600"
+                      />
+                      <MetricCard
+                        title="Receita de Produtos"
+                        value={PriceFormater(data.stockMovement.totalSalesRevenue)}
+                        icon={DollarSign}
+                        description="Valor bruto de vendas"
+                        valueClassName="text-green-600"
+                      />
+                      <MetricCard
+                        title="Lucro Líquido"
+                        value={PriceFormater(data.stockMovement.netProductRevenue)}
+                        icon={TrendingUp}
+                        description="Receita - Custo dos produtos"
+                        valueClassName="text-emerald-600"
+                        className="bg-emerald-50 border-emerald-200"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
