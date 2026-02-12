@@ -23,6 +23,9 @@ import { Store, CalendarDays, Clock, AlertCircle, RefreshCw, Trash2, Plus, Power
 import { Button } from "@/components/ui/button";
 import { CreateBarbershopModal } from "@/components/CreateBarbershopModal";
 import { ManagePlanModal } from "@/components/ManagePlanModal";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -136,18 +139,20 @@ export function SuperAdminDashboardPage() {
     }
   };
 
-  const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+  const handleUpdateStatus = async (status: string, trialDays?: number) => {
+    if (!statusModal.shop) return;
 
-  const handleToggleStatus = async (barbershopId: string) => {
-    setTogglingStatus(barbershopId);
+    setUpdatingStatus(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/superadmin/barbershops/${barbershopId}/toggle-status`,
+        `${API_BASE_URL}/api/superadmin/barbershops/${statusModal.shop._id}/status`,
         {
           method: "PATCH",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ status, trialDays }),
           credentials: "include",
         }
       );
@@ -156,11 +161,12 @@ export function SuperAdminDashboardPage() {
         throw new Error("Erro ao alterar status da barbearia");
       }
 
+      setStatusModal({ open: false, shop: null });
       fetchData(); // Recarrega os dados
     } catch (err: any) {
       alert(err.message || "Erro ao alterar status da barbearia");
     } finally {
-      setTogglingStatus(null);
+      setUpdatingStatus(false);
     }
   };
 
@@ -206,14 +212,15 @@ export function SuperAdminDashboardPage() {
     return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
   };
 
-  const getStatusBadge = (status: string, isTrial: boolean, trialDayNumber: number | null) => {
+  const getStatusBadge = (status: string, isTrial: boolean, trialEndsAt: string | null) => {
     if (status === "active" && !isTrial) {
       return <Badge className="bg-green-600 hover:bg-green-600">Ativo</Badge>;
     }
     if (status === "trial" && isTrial) {
+      const daysRemaining = trialEndsAt ? Math.ceil((new Date(trialEndsAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
       return (
         <Badge className="bg-amber-500 hover:bg-amber-500">
-          Trial - Dia {trialDayNumber}/7
+          Trial - {daysRemaining > 0 ? `${daysRemaining} dias rest.` : 'Expirado'}
         </Badge>
       );
     }
@@ -358,7 +365,7 @@ export function SuperAdminDashboardPage() {
                       {shop.metrics.weeklyBookings}
                     </TableCell>
                     <TableCell className="text-center">
-                      {getStatusBadge(shop.accountStatus, shop.isTrial, shop.trialDayNumber)}
+                      {getStatusBadge(shop.accountStatus, shop.isTrial, shop.trialEndsAt)}
                     </TableCell>
                     <TableCell className="text-slate-300">
                       {formatDate(shop.createdAt)}
@@ -379,26 +386,11 @@ export function SuperAdminDashboardPage() {
                           className="bg-slate-800 border-slate-700 text-white"
                         >
                           <DropdownMenuItem
-                            onClick={() => handleToggleStatus(shop._id)}
-                            disabled={togglingStatus === shop._id}
+                            onClick={() => setStatusModal({ open: true, shop })}
                             className="cursor-pointer hover:bg-slate-700 focus:bg-slate-700"
                           >
-                            {togglingStatus === shop._id ? (
-                              <>
-                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                Processando...
-                              </>
-                            ) : shop.accountStatus === "active" ? (
-                              <>
-                                <Ban className="w-4 h-4 mr-2 text-orange-400" />
-                                Desativar
-                              </>
-                            ) : (
-                              <>
-                                <Power className="w-4 h-4 mr-2 text-green-400" />
-                                Ativar
-                              </>
-                            )}
+                            <Power className="w-4 h-4 mr-2 text-green-400" />
+                            Gerenciar Status
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -492,6 +484,110 @@ export function SuperAdminDashboardPage() {
         onSuccess={fetchData}
         token={token || ""}
       />
+
+      {/* Modal de Gerenciamento de Status */}
+      <Dialog open={statusModal.open} onOpenChange={(open) => setStatusModal({ open, shop: open ? statusModal.shop : null })}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Status - {statusModal.shop?.name}</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Altere o status da barbearia ou conceda um período de teste grátis.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
+              <Label className="text-sm font-medium text-slate-300">Escolha o status:</Label>
+              <div className="grid gap-4">
+                <Button
+                  variant={statusModal.shop?.accountStatus === "active" && !statusModal.shop?.isTrial ? "default" : "outline"}
+                  className={`justify-start h-auto py-3 px-4 ${statusModal.shop?.accountStatus === "active" && !statusModal.shop?.isTrial ? "bg-green-600 hover:bg-green-700" : "border-slate-700 hover:bg-slate-700 text-slate-300"}`}
+                  onClick={() => handleUpdateStatus("active")}
+                  disabled={updatingStatus}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="font-semibold flex items-center gap-2">
+                      <Power className="w-4 h-4" /> Ativar Mensalidade
+                    </span>
+                    <span className="text-xs opacity-80 text-left">Define o status como ativo e remove restrições de teste.</span>
+                  </div>
+                </Button>
+
+                <div className="space-y-3 p-4 rounded-lg border border-slate-700 bg-slate-900/50">
+                  <div className="flex items-center gap-2 text-amber-400 font-semibold mb-2">
+                    <Clock className="w-4 h-4" /> Ativar Teste Grátis
+                  </div>
+
+                  <RadioGroup value={trialOption} onValueChange={setTrialOption} className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center space-x-2 bg-slate-800 p-2 rounded border border-slate-700">
+                      <RadioGroupItem value="7" id="t7" />
+                      <Label htmlFor="t7" className="text-xs">7 Dias</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-slate-800 p-2 rounded border border-slate-700">
+                      <RadioGroupItem value="14" id="t14" />
+                      <Label htmlFor="t14" className="text-xs">14 Dias</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-slate-800 p-2 rounded border border-slate-700">
+                      <RadioGroupItem value="30" id="t30" />
+                      <Label htmlFor="t30" className="text-xs">30 Dias</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 bg-slate-800 p-2 rounded border border-slate-700">
+                      <RadioGroupItem value="custom" id="tcustom" />
+                      <Label htmlFor="tcustom" className="text-xs">Personalizado</Label>
+                    </div>
+                  </RadioGroup>
+
+                  {trialOption === "custom" && (
+                    <div className="pt-2">
+                      <Input
+                        type="number"
+                        placeholder="Número de dias"
+                        value={customDays}
+                        onChange={(e) => setCustomDays(e.target.value)}
+                        className="bg-slate-800 border-slate-700 text-white h-8"
+                      />
+                    </div>
+                  )}
+
+                  <Button
+                    variant="default"
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white mt-2"
+                    onClick={() => handleUpdateStatus("trial", trialOption === "custom" ? parseInt(customDays) : parseInt(trialOption))}
+                    disabled={updatingStatus}
+                  >
+                    Ativar Trial
+                  </Button>
+                </div>
+
+                <Button
+                  variant={statusModal.shop?.accountStatus === "inactive" ? "destructive" : "outline"}
+                  className={`justify-start h-auto py-3 px-4 ${statusModal.shop?.accountStatus === "inactive" ? "bg-red-600 hover:bg-red-700" : "border-slate-700 hover:bg-slate-700 text-slate-300"}`}
+                  onClick={() => handleUpdateStatus("inactive")}
+                  disabled={updatingStatus}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="font-semibold flex items-center gap-2 text-red-100">
+                      <Ban className="w-4 h-4" /> Desativar Conta
+                    </span>
+                    <span className="text-xs opacity-80 text-left text-slate-400">Bloqueia o acesso de administração da barbearia.</span>
+                  </div>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setStatusModal({ open: false, shop: null })}
+              className="border-slate-700 text-slate-300 hover:bg-slate-700"
+              disabled={updatingStatus}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

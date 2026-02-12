@@ -49,6 +49,11 @@ router.post("/barbershops", async (req, res) => {
 
     // 4. Cria a barbearia
     const newBarbershop = await Barbershop.create(barbershopData);
+    
+    // Converte para objeto e remove campos sensíveis antes de enviar ao front
+    const barbershopResponse = newBarbershop.toObject();
+    delete barbershopResponse.mercadoPagoAccessToken;
+    delete barbershopResponse.mercadoPagoWebhookSecret;
 
     // 5. Cria o usuário Admin (dono)
     const newAdmin = await AdminUser.create({
@@ -61,7 +66,7 @@ router.post("/barbershops", async (req, res) => {
 
     // 6. Responde com sucesso (omitindo dados sensíveis)
     res.status(201).json({
-      barbershop: newBarbershop,
+      barbershop: barbershopResponse,
       admin: {
         _id: newAdmin._id,
         email: newAdmin.email,
@@ -205,22 +210,76 @@ router.delete("/barbershops/:barbershopId", async (req, res) => {
   }
 });
 
-// PATCH /api/superadmin/barbershops/:barbershopId/toggle-status
-router.patch("/barbershops/:barbershopId/toggle-status", async (req, res) => {
+// PATCH /api/superadmin/barbershops/:barbershopId/status - Gerenciar status e trial
+router.patch("/barbershops/:barbershopId/status", async (req, res) => {
   try {
     const { barbershopId } = req.params;
+    const { status, trialDays } = req.body;
 
-    // Busca a barbearia
     const barbershop = await Barbershop.findById(barbershopId);
     if (!barbershop) {
       return res.status(404).json({ error: "Barbearia não encontrada." });
     }
 
-    // Alterna o status entre 'active' e 'inactive'
+    if (status === "trial") {
+      const days = parseInt(trialDays);
+      if (isNaN(days) || days <= 0) {
+        return res.status(400).json({ error: "Número de dias de trial inválido." });
+      }
+
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + days);
+      trialEndsAt.setHours(23, 59, 59, 999);
+
+      barbershop.accountStatus = "trial";
+      barbershop.isTrial = true;
+      barbershop.trialEndsAt = trialEndsAt;
+    } else if (status === "active") {
+      barbershop.accountStatus = "active";
+      barbershop.isTrial = false;
+      barbershop.trialEndsAt = null;
+    } else if (status === "inactive") {
+      barbershop.accountStatus = "inactive";
+    } else {
+      return res.status(400).json({ error: "Status inválido." });
+    }
+
+    await barbershop.save();
+
+    res.json({
+      message: "Status atualizado com sucesso.",
+      barbershop: {
+        _id: barbershop._id,
+        name: barbershop.name,
+        accountStatus: barbershop.accountStatus,
+        isTrial: barbershop.isTrial,
+        trialEndsAt: barbershop.trialEndsAt,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar status da barbearia:", error);
+    res.status(500).json({ error: "Erro ao atualizar status da barbearia." });
+  }
+});
+
+// Mantém o toggle-status antigo por compatibilidade, mas agora ele apenas alterna entre active e inactive
+router.patch("/barbershops/:barbershopId/toggle-status", async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
     const newStatus = barbershop.accountStatus === "active" ? "inactive" : "active";
     
-    // Atualiza o status
     barbershop.accountStatus = newStatus;
+    if (newStatus === "active") {
+      barbershop.isTrial = false;
+      barbershop.trialEndsAt = null;
+    }
+    
     await barbershop.save();
 
     res.json({ 
