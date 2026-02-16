@@ -36,6 +36,16 @@ const customerSchema = new mongoose.Schema(
       unique: true, // Garante que não haverá dois clientes com o mesmo telefone
       trim: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      unique: true,
+      sparse: true, // Permite que múltiplos clientes sem email existam sem conflito
+    },
+    birthDate: {
+      type: Date,
+    },
     bookings: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -104,11 +104,80 @@ router.post("/verify-otp", loginLimiter, async (req, res) => {
         _id: customer._id,
         name: customer.name,
         phone: customer.phone,
+        email: customer.email,
       },
     });
   } catch (error) {
     console.error("Erro ao verificar OTP:", error);
     res.status(500).json({ error: "Erro interno ao verificar o código." });
+  }
+});
+
+// ROTA: GET /api/auth/customer/me
+// Retorna os dados completos do cliente autenticado
+import { protectCustomer } from "../middleware/authCustomerMiddleware.js";
+
+router.get("/me", protectCustomer, async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.customer._id);
+    if (!customer) {
+      return res.status(404).json({ error: "Cliente não encontrado." });
+    }
+    res.status(200).json(customer);
+  } catch (error) {
+    console.error("Erro ao buscar dados do cliente:", error);
+    res.status(500).json({ error: "Erro interno ao buscar dados." });
+  }
+});
+
+// ROTA: PUT /api/auth/customer/update-profile
+// Permite ao cliente atualizar seus dados (email e data de nascimento)
+router.put("/update-profile", protectCustomer, async (req, res) => {
+  try {
+    const { email, birthDate, name } = req.body;
+    const customer = await Customer.findById(req.customer._id);
+
+    if (!customer) {
+      return res.status(404).json({ error: "Cliente não encontrado." });
+    }
+
+    if (email !== undefined) {
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      // Verifica se o email já está em uso por outro cliente
+      if (normalizedEmail !== "") {
+        const existingCustomer = await Customer.findOne({ 
+          email: normalizedEmail,
+          _id: { $ne: req.customer._id } 
+        });
+
+        if (existingCustomer) {
+          return res.status(400).json({ error: "Este e-mail já está sendo usado por outra conta." });
+        }
+      }
+      
+      customer.email = normalizedEmail;
+    }
+
+    if (name !== undefined) customer.name = name.trim();
+    if (birthDate !== undefined) customer.birthDate = birthDate;
+
+    await customer.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Perfil atualizado com sucesso!",
+      customer: {
+        _id: customer._id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        birthDate: customer.birthDate,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar perfil do cliente:", error);
+    res.status(500).json({ error: "Erro interno ao atualizar perfil." });
   }
 });
 

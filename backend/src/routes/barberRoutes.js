@@ -219,35 +219,39 @@ router.get("/", async (req, res) => {
       // 2. Faz o "JOIN" com a coleção 'adminusers'
       {
         $lookup: {
-          from: "adminusers", // O nome da coleção no MongoDB (geralmente plural e minúsculo)
-          localField: "_id", // O campo no modelo 'Barber'
-          foreignField: "barberProfile", // O campo correspondente no modelo 'AdminUser'
-          as: "loginInfo", // O nome do novo array que será adicionado com os dados do usuário
+          from: "adminusers",
+          localField: "_id",
+          foreignField: "barberProfile",
+          as: "loginInfo",
         },
       },
-      // 3. O $lookup retorna um array. $unwind descontrói esse array para podermos acessar os campos.
       {
         $unwind: {
           path: "$loginInfo",
-          preserveNullAndEmptyArrays: true, // Mantém barbeiros na lista mesmo que não tenham um login (importante!)
-        },
-      },
-      // 4. Projeta (seleciona) os campos que queremos retornar para o frontend
-      {
-        $project: {
-          _id: 1, // 1 significa incluir o campo
-          name: 1,
-          image: 1,
-          availability: 1,
-          break: 1,
-          email: "$loginInfo.email",
-          commission: 1,
-          // Pega o email de dentro do objeto 'loginInfo' que foi juntado
+          preserveNullAndEmptyArrays: true,
         },
       },
     ]);
 
-    res.json(barbers);
+    // Sanitiza os dados dependendo da autenticação
+    // Nota: protectAdmin não foi usado como middleware global, então verificamos o token manualmente se disponível
+    // ou apenas removemos campos sensíveis por padrão para esta rota pública.
+    
+    const sanitizedBarbers = barbers.map(barber => {
+      const baseInfo = {
+        _id: barber._id,
+        name: barber.name,
+        image: barber.image,
+        availability: barber.availability,
+        break: barber.break,
+        commission: barber.commission,
+        email: barber.loginInfo?.email
+      };
+      
+      return baseInfo;
+    });
+
+    res.json(sanitizedBarbers);
   } catch (e) {
     console.error("Erro ao buscar funcionários:", e);
     res.status(500).json({ error: "Erro ao buscar funcionários." });

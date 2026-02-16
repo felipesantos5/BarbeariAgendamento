@@ -17,48 +17,51 @@ const barberBaseSchema = z.object({
         end: z.string().regex(/^\d{2}:\d{2}$/, "Formato de hora deve ser HH:mm"),
       })
     )
-    .optional()
-    .default([
-      { day: "Segunda-feira", start: "09:00", end: "18:00" },
-      { day: "Terça-feira", start: "09:00", end: "18:00" },
-      { day: "Quarta-feira", start: "09:00", end: "18:00" },
-      { day: "Quinta-feira", start: "09:00", end: "18:00" },
-      { day: "Sexta-feira", start: "09:00", end: "18:00" },
-    ]),
+    .optional(),
   break: z
     .object({
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().optional(),
       start: z
         .string()
         .regex(/^\d{2}:\d{2}$/, "Formato de hora deve ser HH:mm")
-        .default("12:00"),
+        .optional(),
       end: z
         .string()
         .regex(/^\d{2}:\d{2}$/, "Formato de hora deve ser HH:mm")
-        .default("13:00"),
+        .optional(),
       days: z
         .array(z.string())
-        .default([])
+        .optional()
         .refine(
           (days) =>
-            days.every((day) => ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"].includes(day)),
+            !days || days.every((day) => ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"].includes(day)),
           "Dias da semana inválidos"
         ),
     })
-    .optional()
-    .default({
-      enabled: false,
-      start: "12:00",
-      end: "13:00",
-      days: [],
-    }),
-  commission: z.number().optional().default(0),
-  productCommission: z.number().optional().default(0),
+    .optional(),
+  commission: z.number().optional(),
+  productCommission: z.number().optional(),
 });
 
 // barberCreationSchema agora herda o 'email' opcional do barberBaseSchema
 // O email apenas é necessário se o dono quiser criar uma conta de login para o barbeiro
-export const barberCreationSchema = barberBaseSchema;
+export const barberCreationSchema = barberBaseSchema.extend({
+  availability: barberBaseSchema.shape.availability.default([
+    { day: "Segunda-feira", start: "09:00", end: "18:00" },
+    { day: "Terça-feira", start: "09:00", end: "18:00" },
+    { day: "Quarta-feira", start: "09:00", end: "18:00" },
+    { day: "Quinta-feira", start: "09:00", end: "18:00" },
+    { day: "Sexta-feira", start: "09:00", end: "18:00" },
+  ]),
+  break: barberBaseSchema.shape.break.default({
+    enabled: false,
+    start: "12:00",
+    end: "13:00",
+    days: [],
+  }),
+  commission: z.number().optional().default(0),
+  productCommission: z.number().optional().default(0),
+});
 
 // barberUpdateSchema agora herdará o 'email' opcional do barberBaseSchema
-export const barberUpdateSchema = barberBaseSchema;
+export const barberUpdateSchema = barberBaseSchema.partial();

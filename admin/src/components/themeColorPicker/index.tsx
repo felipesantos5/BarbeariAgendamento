@@ -25,7 +25,6 @@ const defaultPredefinedColors = [
   "#A855F7",
   "#EC4899",
   "#78716C",
-  "#FFFFFF",
   "#000000",
   "#CBD5E1",
 ];

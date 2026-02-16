@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import "dotenv/config";
+import { timingSafeCompare } from "../utils/security.js";
+
 
 const router = express.Router();
 
@@ -21,18 +23,9 @@ const superAdminLoginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Comparação timing-safe para evitar timing attacks
-function timingSafeCompare(a, b) {
-  if (!a || !b) return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) {
-    // Para evitar timing attack no length, fazemos uma comparação dummy
-    crypto.timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return crypto.timingSafeEqual(bufA, bufB);
-}
+
+
+
 
 // POST /api/auth/superadmin/login
 router.post("/login", superAdminLoginLimiter, async (req, res) => {

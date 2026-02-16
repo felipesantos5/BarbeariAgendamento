@@ -25,12 +25,17 @@ import { BarberPerformancePage } from "./pages/BarberPerformancePage.tsx";
 import { RecurrencePage } from "./pages/RecurrencePage.tsx";
 import { CheckoutConfigPage } from "./pages/CheckoutConfigPage.tsx";
 import { OperationalCostsPage } from "./pages/OperationalCostsPage.tsx";
+import { WhatsAppConfigPage } from "./pages/WhatsAppConfigPage";
 import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
+import { SuperAdminBillingPage } from "./pages/superadmin/SuperAdminBillingPage";
+import { SuperAdminExpensesPage } from "./pages/superadmin/SuperAdminExpensesPage";
+import { Toaster } from "sonner";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors />
       <Routes>
         {/* Super Admin Routes */}
         <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
@@ -38,6 +43,8 @@ export default function App() {
           <Route path="/superadmin" element={<SuperAdminLayout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<SuperAdminDashboardPage />} />
+            <Route path="billing" element={<SuperAdminBillingPage />} />
+            <Route path="expenses" element={<SuperAdminExpensesPage />} />
           </Route>
         </Route>
 
@@ -70,6 +77,7 @@ export default function App() {
               <Route path="produtos" element={<ProductManagement />} />
               <Route path="recorrencia" element={<RecurrencePage />} />
               <Route path="custos-operacionais" element={<OperationalCostsPage />} />
+              <Route path="whatsapp" element={<WhatsAppConfigPage />} />
             </Route>
 
             <Route path="*" element={<>nao encontrado</>} />

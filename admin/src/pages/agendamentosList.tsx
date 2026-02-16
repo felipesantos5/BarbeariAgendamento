@@ -146,21 +146,10 @@ export const AgendamentosList = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center p-10">
-        <Loader2 className="animate-spin h-8 w-8" />
-      </div>
-    );
-  }
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Histórico de Agendamentos</CardTitle>
-        {/* <CardDescription>
-          Visualize e filtre todos os agendamentos realizados na sua barbearia.
-        </CardDescription> */}
       </CardHeader>
       <CardContent className="space-y-4">
         {/* --- 4. ÁREA DE FILTROS --- */}
@@ -249,7 +238,16 @@ export const AgendamentosList = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedBookings.length > 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center">
+                    <div className="flex justify-center items-center gap-2">
+                      <Loader2 className="animate-spin h-5 w-5" />
+                      <span>Carregando agendamentos...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : paginatedBookings.length > 0 ? (
                 paginatedBookings.map((booking) => (
                   <TableRow key={booking._id}>
                     <TableCell className="font-medium">
@@ -296,7 +294,6 @@ export const AgendamentosList = () => {
                         )}
                       </div>
                     </TableCell>
-
                   </TableRow>
                 ))
               ) : (

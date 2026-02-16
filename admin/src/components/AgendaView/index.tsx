@@ -14,7 +14,7 @@ interface AgendaEvent {
 
 const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
   const isCanceled = event.resource?.status === "canceled";
-  const isPaid = event.resource?.paymentStatus === "approved";
+  const isPaid = event.resource?.paymentStatus === "approved" || event.resource?.paymentStatus === "paid_in_store";
   const containerClasses = "relative w-full h-full p-1 text-xs overflow-hidden";
 
   if (event.resource?.type === "block") {
@@ -22,6 +22,18 @@ const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
       <div className="p-1 text-sm text-gray-700 font-semibold h-full overflow-hidden">
         <p>{event.resource.barberName}</p>
         <p>{event.title}</p>
+      </div>
+    );
+  }
+
+  if (event.resource?.type === "break") {
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full p-1 text-center overflow-hidden text-white drop-shadow-sm">
+        <span className="text-[10px] font-black uppercase tracking-wider leading-none mb-1">PAUSA</span>
+        <span className="text-[11px] font-bold truncate w-full leading-none mb-1">{event.resource.barberName}</span>
+        <span className="text-[10px] font-medium opacity-90 leading-none">
+          {format(event.start, "HH:mm")} - {format(event.end, "HH:mm")}
+        </span>
       </div>
     );
   }
@@ -36,8 +48,16 @@ const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
         <div className="block truncate opacity-80">{event.resource.service?.name}</div>
       </div>
 
-      {isCanceled && <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/80 transform -rotate-6" />}
-      {isCanceled && <div className="absolute top-1/2 right-0 w-full h-0.5 bg-red-500/80 transform rotate-6" />}
+      {isCanceled && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <line x1="0" y1="0" x2="100" y2="100" stroke="rgba(239, 68, 68, 0.8)" strokeWidth="1" />
+          <line x1="100" y1="0" x2="0" y2="100" stroke="rgba(239, 68, 68, 0.8)" strokeWidth="1" />
+        </svg>
+      )}
 
       {isPaid && !isCanceled && (
         <CheckCircle className="absolute top-1 right-1 h-6 w-6 text-white" style={{ filter: "drop-shadow(0 0 2px rgba(0,0,0,0.7))" }} />
@@ -141,16 +161,18 @@ export function AgendaView({ events, onSelectEvent, onSelectSlot, currentDate, o
 
           // Estilização específica para breaks
           if (event.resource?.type === "break") {
+            const baseColor = event.resource?.color || "#333333";
             return {
               style: {
-                backgroundColor: "#fef3c7", // Fundo amarelo claro
-                backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #fbbf24 2px, #fbbf24 8px)",
-                color: "#92400e", // Texto marrom escuro
-                border: "1px solid #f59e0b",
+                backgroundColor: baseColor,
+                backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 2px, transparent 2px, transparent 10px)",
+                color: "white",
+                border: "1px solid rgba(0,0,0,0.3)",
                 borderRadius: "4px",
-                opacity: event.resource?.isPast ? 0.6 : 0.9,
-                fontWeight: "500",
+                opacity: event.resource?.isPast ? 0.6 : 1,
+                fontWeight: "600",
                 pointerEvents: "none",
+                filter: "brightness(0.7)", // Torna a cor base do barbeiro mais escura
               },
             };
           }
@@ -175,7 +197,8 @@ export function AgendaView({ events, onSelectEvent, onSelectSlot, currentDate, o
           }
 
           if (event.resource?.status === "canceled") {
-            style.textDecoration = "line-through";
+            style.opacity = 0.8;
+            style.filter = "grayscale(0.5)";
           }
 
           return { style };

@@ -31,14 +31,12 @@ function addClient(barbershopId, client) {
     } catch (err) {
       // Ignore errors when closing old connection
     }
-    console.log(`[SSE] Limite atingido. Conexão mais antiga removida para barbershop ${barbershopId}`);
   }
 
   barbershopClients.push(client);
 
   // Set timeout for this connection
   const timeout = setTimeout(() => {
-    console.log(`[SSE] Timeout de conexão para barbershop ${barbershopId}`);
     removeClient(barbershopId, client);
     try {
       client.end();
@@ -53,8 +51,6 @@ function addClient(barbershopId, client) {
     connectedAt: new Date(),
     timeout,
   });
-
-  console.log(`[SSE] Cliente conectado. Total para barbershop ${barbershopId}: ${barbershopClients.length}`);
 }
 
 /**
@@ -81,8 +77,6 @@ function removeClient(barbershopId, client) {
     clearTimeout(metadata.timeout);
   }
   clientMetadata.delete(client);
-
-  console.log(`[SSE] Cliente desconectado de barbershop ${barbershopId}`);
 }
 
 /**
@@ -95,7 +89,6 @@ function sendEventToBarbershop(barbershopId, eventName, data = {}) {
   const barbershopClients = clients.get(barbershopId);
   if (barbershopClients && barbershopClients.length > 0) {
     const message = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-    console.log(`[SSE] Enviando evento '${eventName}' para ${barbershopClients.length} cliente(s) da barbershop ${barbershopId}`);
 
     // Send with error handling, removing dead connections
     const deadClients = [];

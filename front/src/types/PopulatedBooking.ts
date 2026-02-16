@@ -11,5 +11,5 @@ export interface PopulatedBooking {
   service: { _id: string; name: string; price: number }; // << Adicionado _id do serviço
   time: string;
   status: "booked" | "confirmed" | "completed" | "canceled" | "pending_payment" | "payment_expired";
-  paymentStatus?: "approved" | "pending" | "rejected" | "cancelled" | "canceled" | null;
+  paymentStatus?: "approved" | "pending" | "rejected" | "cancelled" | "canceled" | "paid_locally" | null;
 }

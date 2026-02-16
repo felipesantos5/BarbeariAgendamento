@@ -17,8 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer } from "lucide-react";
+import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer, Save } from "lucide-react";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PhoneFormat } from "@/helper/phoneFormater";
 
 interface WhatsAppStatus {
   status: "disconnected" | "connecting" | "connected";
@@ -27,6 +29,8 @@ interface WhatsAppStatus {
   instanceName: string | null;
   connectedAt?: string;
   lastCheckedAt?: string;
+  morningReminderTime?: string;
+  afternoonReminderTime?: string;
 }
 
 const QR_CODE_EXPIRY_TIME = 45; // QR code expira em ~45 segundos
@@ -42,6 +46,9 @@ export const WhatsAppConfigPage = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [qrCodeTimer, setQrCodeTimer] = useState<number>(QR_CODE_EXPIRY_TIME);
+  const [morningTime, setMorningTime] = useState("08:00");
+  const [afternoonTime, setAfternoonTime] = useState("13:00");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
   const qrTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,7 +87,10 @@ export const WhatsAppConfigPage = () => {
   const fetchWhatsAppStatus = async () => {
     try {
       const response = await apiClient.get(`/api/barbershops/${barbershopId}/whatsapp/status`);
-      setWhatsappStatus(response.data);
+      const data = response.data;
+      setWhatsappStatus(data);
+      if (data.morningReminderTime) setMorningTime(data.morningReminderTime);
+      if (data.afternoonReminderTime) setAfternoonTime(data.afternoonReminderTime);
     } catch (error: any) {
       console.error("Erro ao buscar status do WhatsApp:", error);
       toast.error(error.response?.data?.error || "Erro ao buscar status");
@@ -236,6 +246,37 @@ export const WhatsAppConfigPage = () => {
     setQrCodeTimer(QR_CODE_EXPIRY_TIME);
   };
 
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const response = await apiClient.put(`/api/barbershops/${barbershopId}/whatsapp/settings`, {
+        morningReminderTime: morningTime,
+        afternoonReminderTime: afternoonTime,
+      });
+
+      // Atualiza o estado local do status para refletir os novos horários
+      setWhatsappStatus((prev) => prev ? ({
+        ...prev,
+        morningReminderTime: response.data.morningReminderTime,
+        afternoonReminderTime: response.data.afternoonReminderTime,
+      }) : null);
+
+      toast.success("Configurações salvas com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações:", error);
+      toast.error(error.response?.data?.error || "Erro ao salvar configurações");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const timeOptions = [];
+  for (let i = 0; i < 24; i++) {
+    const hour = i.toString().padStart(2, "0");
+    timeOptions.push(`${hour}:00`);
+    timeOptions.push(`${hour}:30`);
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-10">
@@ -290,34 +331,39 @@ export const WhatsAppConfigPage = () => {
             {whatsappStatus?.status === "connected" && whatsappStatus.connectedNumber && (
               <div className="text-right space-y-1">
                 <Label className="text-sm text-muted-foreground">Número Conectado</Label>
-                <p className="font-mono font-semibold text-lg">{whatsappStatus.connectedNumber}</p>
+                <p className="font-mono font-semibold text-lg">{PhoneFormat(whatsappStatus.connectedNumber)}</p>
               </div>
             )}
           </div>
 
-          {/* Instruções */}
-          <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
-            <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
-              <li>Clique em "Conectar WhatsApp" abaixo</li>
-              <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
-              <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
-              <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
-            </ol>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-              💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
-            </p>
-          </fieldset>
+          {/* Instruções - Escondidas se estiver conectado */}
+          {whatsappStatus?.status !== "connected" && (
+            <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
+              <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
+                <li>Clique em "Conectar WhatsApp" abaixo</li>
+                <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
+                <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
+                <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
+              </ol>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+                💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
+              </p>
+            </fieldset>
+          )}
 
           {/* Ações */}
           <div className="flex gap-3">
             {whatsappStatus?.status !== "connected" ? (
               <Button onClick={handleConnect} disabled={isConnecting} size="lg" className="w-full sm:w-auto">
                 {isConnecting ? (
-                  <>
+                  <div className="flex items-center gap-2">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Conectando...
-                  </>
+                    <span>Conectando...</span>
+                    <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">
+                      (Gerando conexão, aguarde...)
+                    </span>
+                  </div>
                 ) : (
                   <>
                     <MessageSquare className="mr-2 h-4 w-4" />
@@ -338,6 +384,74 @@ export const WhatsAppConfigPage = () => {
                 </Button>
               </>
             )}
+          </div>
+
+          <hr className="my-6" />
+
+          {/* Configurações Customizadas */}
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Horários de Lembrete</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Defina o horário em que os lembretes automáticos serão enviados para seus clientes.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="morningTime">Lembrete Período Manhã</Label>
+                <div className="flex flex-col gap-2">
+                  <Select value={morningTime} onValueChange={setMorningTime}>
+                    <SelectTrigger id="morningTime" className="w-full">
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.map((time) => (
+                        <SelectItem key={`morning-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">
+                    Enviado para agendamentos até as 13:00
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="afternoonTime">Lembrete Período Tarde</Label>
+                <div className="flex flex-col gap-2">
+                  <Select value={afternoonTime} onValueChange={setAfternoonTime}>
+                    <SelectTrigger id="afternoonTime" className="w-full">
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.map((time) => (
+                        <SelectItem key={`afternoon-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">
+                    Enviado para agendamentos após as 13:00
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
+                {isSavingSettings ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Salvar Configurações de Horário
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -393,7 +507,7 @@ export const WhatsAppConfigPage = () => {
                   {isRefreshingQR ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Gerando...
+                      Gerando conexão, aguarde...
                     </>
                   ) : (
                     <>
@@ -417,7 +531,17 @@ export const WhatsAppConfigPage = () => {
                 </div>
               </>
             ) : (
-              <Loader2 className="animate-spin h-16 w-16 text-primary" />
+              <div className="flex flex-col items-center gap-4 py-12">
+                <Loader2 className="animate-spin h-16 w-16 text-primary" />
+                <div className="text-center space-y-2">
+                  <p className="text-lg font-medium animate-pulse text-primary">
+                    Gerando conexão, aguarde...
+                  </p>
+                  <p className="text-sm text-muted-foreground px-8">
+                    Isso pode levar alguns segundos. Não feche esta janela.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         </DialogContent>

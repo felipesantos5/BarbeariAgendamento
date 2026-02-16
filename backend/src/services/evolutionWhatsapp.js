@@ -185,12 +185,10 @@ export async function sendWhatsAppConfirmation(customerPhone, message) {
       );
 
       if (error.response) {
-        console.error(`   Status: ${error.response.status}`);
-        console.error(`   Resposta:`, error.response.data);
-
         if (error.response.status === 400) {
-          console.error(`   Telefone: 55${cleanPhone}`);
-          console.error(`   Instância: ${INSTANCE_NAME}`);
+          console.error(`   Status: 400 - Dados inválidos (Telefone: 55${cleanPhone})`);
+        } else {
+          console.error(`   Status: ${error.response.status}`);
         }
       } else if (error.code === "ECONNREFUSED") {
         console.error(`   Erro: Conexão recusada - Evolution API pode estar offline`);

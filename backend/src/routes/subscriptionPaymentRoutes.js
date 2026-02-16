@@ -118,31 +118,22 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
       });
     }
 
-    // Calcular datas
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + plan.durationInDays);
+    // Pegar email do customer ou do body (caso tenha sido preenchido agora no modal)
+    const emailFromBody = req.body.email?.trim();
+    const customerEmail = (customer.email || emailFromBody);
 
-    // Criar Subscription com status pending
-    const subscription = new Subscription({
-      customer: customer._id,
-      plan: planId,
-      barbershop: barbershopId,
-      startDate,
-      endDate,
-      status: "pending",
-      creditsRemaining: plan.totalCredits,
-      autoRenew: true,
-    });
+    if (!customerEmail) {
+      return res.status(400).json({ error: "O e-mail é obrigatório para criar uma assinatura." });
+    }
 
-    await subscription.save();
-
-    // Adicionar ao array de subscriptions do customer
-    await Customer.findByIdAndUpdate(customer._id, {
-      $push: { subscriptions: subscription._id },
-    });
+    // Se o email veio no body e não estava no customer ou é diferente, atualizar o cadastro
+    if (emailFromBody && customer.email !== emailFromBody) {
+      await Customer.findByIdAndUpdate(customer._id, { email: emailFromBody });
+      console.log(`[Subscription] Email do cliente ${customer._id} atualizado para: ${emailFromBody}`);
+    }
 
     // Configurar Mercado Pago
+    console.log(`[Subscription] Usando token do banco (início): ${barbershop.mercadoPagoAccessToken?.substring(0, 15)}...`);
     const client = new MercadoPagoConfig({
       accessToken: barbershop.mercadoPagoAccessToken,
     });
@@ -151,56 +142,52 @@ router.post("/create-preapproval", protectCustomer, async (req, res) => {
 
     // Dados do external_reference para identificar no webhook
     const externalReference = JSON.stringify({
-      subscriptionId: subscription._id.toString(),
       customerId: customer._id.toString(),
-      customerPhone: customer.phone,
       planId: plan._id.toString(),
       barbershopId: barbershop._id.toString(),
     });
 
-    // Criar preapproval no Mercado Pago
-    const notificationUrl = `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`;
-
-    console.log("📋 Criando PreApproval com notification_url:", notificationUrl);
+    // URL base para notificações e retorno (Prioriza Ngrok se disponível no .env)
+    const baseUrl = process.env.NGROK_URL || "https://api.barbeariagendamento.com.br";
 
     const preapprovalData = {
       body: {
-        reason: `Plano ${plan.name} - ${barbershop.name}`,
+        reason: `Assinatura ${plan.name}`.substring(0, 60),
         auto_recurring: {
           frequency: 1,
           frequency_type: "months",
-          transaction_amount: plan.price,
+          transaction_amount: Number(plan.price),
           currency_id: "BRL",
         },
-        payer_email: `cliente_${customer._id}@barbeariagendamento.com.br`,
-        back_url: `https://barbeariagendamento.com.br/${barbershop.slug}/assinatura-sucesso`,
+        payer_email: customerEmail.trim().toLowerCase(),
+        back_url: `${baseUrl}/${barbershop.slug}/assinatura-sucesso`,
+        notification_url: `${baseUrl}/api/barbershops/${barbershopId}/subscriptions/webhook?barbershopId=${barbershopId}`,
         external_reference: externalReference,
-        notification_url: notificationUrl,
       },
     };
 
-    console.log("📤 Enviando PreApproval para Mercado Pago...");
-    const result = await preapproval.create(preapprovalData);
-    console.log("✅ PreApproval criado:", {
-      id: result.id,
-      status: result.status,
-      init_point: result.init_point,
-    });
+    console.log("[Subscription] Enviando payload ao MP:", JSON.stringify(preapprovalData, null, 2));
 
-    // Salvar ID do preapproval na subscription
-    subscription.mercadoPagoPreapprovalId = result.id;
-    await subscription.save();
+    const result = await preapproval.create(preapprovalData);
+    console.log("✅ PreApproval criado:", result.id);
 
     res.json({
       init_point: result.init_point,
-      subscriptionId: subscription._id,
     });
   } catch (error) {
-    console.error("Erro ao criar assinatura:", error);
-    const errorMessage = error.cause?.message || error.message || "Falha ao criar assinatura.";
+    console.error("💥 ERRO BRUTO DO MERCADO PAGO:");
+    if (error.response) {
+      console.error("Status:", error.status);
+      console.error("Data:", JSON.stringify(error.cause, null, 2));
+    } else {
+      console.error(error);
+    }
+    
+    const mpDetails = error.cause?.[0]?.description || error.message;
+
     res.status(500).json({
       error: "Falha ao criar assinatura.",
-      details: errorMessage,
+      details: mpDetails || "Erro interno no processamento do Mercado Pago.",
     });
   }
 });
@@ -228,16 +215,7 @@ router.post("/webhook", async (req, res) => {
   let barbershopId = req.query.barbershopId || req.params.barbershopId;
 
   const logPrefix = `[WEBHOOK-SUB ${notification.type || 'unknown'}]`;
-  console.log(`\n${"=".repeat(80)}`);
-  console.log(`${logPrefix} 🔔 WEBHOOK RECEBIDO`);
-  console.log(`${logPrefix} ID: ${notification.data?.id}`);
-  console.log(`${logPrefix} Query params:`, req.query);
-  console.log(`${logPrefix} Route params:`, req.params);
-  console.log(`${logPrefix} Body:`, JSON.stringify(notification, null, 2));
-  console.log(`${logPrefix} Headers:`, {
-    "x-signature": req.headers["x-signature"] ? "presente" : "ausente",
-    "x-request-id": req.headers["x-request-id"] || "ausente",
-  });
+  console.log(`${logPrefix} 🔔 WEBHOOK RECEBIDO - ID: ${notification.data?.id}`);
 
   // Responder 200 imediatamente para o MP não reenviar
   res.sendStatus(200);
@@ -339,39 +317,53 @@ router.post("/webhook", async (req, res) => {
       const preapproval = new PreApproval(client);
       const preapprovalData = await preapproval.get({ id: dataId });
 
-      console.log(`${logPrefix} 📋 Dados do preapproval:`, JSON.stringify({
-        id: preapprovalData.id,
-        status: preapprovalData.status,
-        external_reference: preapprovalData.external_reference,
-        payer_email: preapprovalData.payer_email,
-      }, null, 2));
-
       // Tentar encontrar subscription pelo mercadoPagoPreapprovalId
       let subscription = await Subscription.findOne({
         mercadoPagoPreapprovalId: dataId,
-      }).populate("plan");
+      }).populate("plan").populate("customer", "name phone");
 
       console.log(`${logPrefix} 🔍 Busca por mercadoPagoPreapprovalId: ${subscription ? 'ENCONTRADO' : 'NÃO ENCONTRADO'}`);
 
-      // Se não encontrou pelo ID, tentar pelo external_reference
+      // Se não encontrou pelo ID, tentar pelo external_reference (novo formato JSON)
       if (!subscription && preapprovalData.external_reference) {
         try {
           const refData = JSON.parse(preapprovalData.external_reference);
-          console.log(`${logPrefix} 🔍 Tentando buscar por external_reference:`, refData);
-          subscription = await Subscription.findById(refData.subscriptionId).populate("plan");
-          console.log(`${logPrefix} 🔍 Busca por external_reference: ${subscription ? 'ENCONTRADO' : 'NÃO ENCONTRADO'}`);
+          console.log(`${logPrefix} 🔍 Investigando metadata no external_reference:`, refData);
 
-          // Salvar o mercadoPagoPreapprovalId se não tinha
-          if (subscription && !subscription.mercadoPagoPreapprovalId) {
-            subscription.mercadoPagoPreapprovalId = dataId;
+          if (refData.customerId && refData.planId) {
+            // Buscar dados básicos do plano para criar a subscription
+            const plan = await Plan.findById(refData.planId);
+            if (!plan) throw new Error("Plano não encontrado no banco.");
+
+            const startDate = new Date();
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + plan.durationInDays);
+
+            subscription = new Subscription({
+              customer: refData.customerId,
+              plan: refData.planId,
+              barbershop: refData.barbershopId || barbershopId,
+              startDate,
+              endDate,
+              status: "pending",
+              creditsRemaining: plan.totalCredits,
+              autoRenew: true,
+              mercadoPagoPreapprovalId: dataId,
+            });
+
+            await subscription.save();
+            console.log(`${logPrefix} ✨ Subscription criada como PENDING através do webhook (PreApproval)`);
+            
+            // Popular para logs seguintes
+            subscription = await Subscription.findById(subscription._id).populate("plan").populate("customer", "name phone");
           }
         } catch (parseError) {
-          console.error("❌ Erro ao parsear external_reference:", parseError);
+          console.error(`${logPrefix} ❌ Erro ao processar external_reference para criação:`, parseError);
         }
       }
 
       if (!subscription) {
-        console.log(`${logPrefix} ❌ Subscription não encontrada - abortando processamento`);
+        console.log(`${logPrefix} ❌ Subscription não encontrada e não pôde ser criada - abortando`);
         return;
       }
 
@@ -381,30 +373,16 @@ router.post("/webhook", async (req, res) => {
         creditsRemaining: subscription.creditsRemaining,
       });
 
-      // Atualizar baseado no status do preapproval
-      console.log(`${logPrefix} 🔄 Processando status do preapproval: ${preapprovalData.status}`);
-
-      if (preapprovalData.status === "authorized" || preapprovalData.status === "pending") {
-        if (subscription.status === "pending") {
-          subscription.status = "active";
-          subscription.lastPaymentDate = new Date();
-          subscription.nextPaymentDate = new Date();
-          subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
-          await subscription.save();
-          console.log(`${logPrefix} ✅ Subscription ${subscription._id} ativada com sucesso!`);
-        } else {
-          console.log(`${logPrefix} ⚠️ Subscription já está com status: ${subscription.status} (não é pending)`);
-        }
-      } else if (preapprovalData.status === "paused") {
+      if (preapprovalData.status === "paused") {
         subscription.autoRenew = false;
         await subscription.save();
         console.log(`${logPrefix} ⏸️ Subscription pausada - autoRenew desativado`);
       } else if (preapprovalData.status === "cancelled") {
         subscription.autoRenew = false;
         await subscription.save();
-        console.log(`${logPrefix} ❌ Subscription cancelada - autoRenew desativado`);
+        console.log(`${logPrefix} ❌ Subscription cancelada no MP - Renovação desativada. O cliente mantém acesso até ${subscription.endDate.toLocaleDateString()}`);
       } else {
-        console.log(`${logPrefix} ⚠️ Status do preapproval não reconhecido: ${preapprovalData.status}`);
+        console.log(`${logPrefix} ℹ️ Status do preapproval: ${preapprovalData.status} (Nenhuma ação de ativação tomada aqui)`);
       }
     }
 
@@ -414,45 +392,92 @@ router.post("/webhook", async (req, res) => {
       const payment = new Payment(client);
       const paymentData = await payment.get({ id: dataId });
 
-      console.log(`${logPrefix} 💳 Dados do pagamento:`, JSON.stringify({
-        id: paymentData.id,
-        status: paymentData.status,
-        preapproval_id: paymentData.preapproval_id,
-        transaction_amount: paymentData.transaction_amount,
-      }, null, 2));
-
       if (paymentData.status === "approved" && paymentData.preapproval_id) {
-        const subscription = await Subscription.findOne({
+        let subscription = await Subscription.findOne({
           mercadoPagoPreapprovalId: paymentData.preapproval_id,
-        }).populate("plan");
+        }).populate("plan").populate("customer", "name phone");
 
         console.log(`${logPrefix} 🔍 Subscription do pagamento: ${subscription ? 'ENCONTRADA' : 'NÃO ENCONTRADA'}`);
+
+        // Se não encontrou, talvez a notificação de preapproval ainda não tenha sido processada
+        // Vamos tentar criar aqui também usando o external_reference do pagamento
+        if (!subscription && paymentData.external_reference) {
+          try {
+            const refData = JSON.parse(paymentData.external_reference);
+            if (refData.customerId && refData.planId) {
+              const plan = await Plan.findById(refData.planId);
+              if (plan) {
+                const startDate = new Date();
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + plan.durationInDays);
+
+                subscription = new Subscription({
+                  customer: refData.customerId,
+                  plan: refData.planId,
+                  barbershop: refData.barbershopId || barbershopId,
+                  startDate,
+                  endDate,
+                  status: "pending", // Será ativado logo abaixo
+                  creditsRemaining: plan.totalCredits,
+                  autoRenew: true,
+                  mercadoPagoPreapprovalId: paymentData.preapproval_id,
+                });
+                await subscription.save();
+                subscription = await Subscription.findById(subscription._id).populate("plan").populate("customer", "name phone");
+                console.log(`${logPrefix} ✨ Subscription criada como PENDING através do webhook (Payment)`);
+              }
+            }
+          } catch (e) {
+            console.error(`${logPrefix} ❌ Erro ao criar subscription no pagamento:`, e);
+          }
+        }
 
         if (subscription) {
           console.log(`${logPrefix} 📊 Status atual: ${subscription.status}`);
 
-          // Se está pending, é o primeiro pagamento - ativar
+          // Se está pending, é o primeiro pagamento - ativar de fato agora
           if (subscription.status === "pending") {
+            const now = new Date();
             subscription.status = "active";
-            subscription.lastPaymentDate = new Date();
-            subscription.nextPaymentDate = new Date();
+            subscription.lastPaymentDate = now;
+            subscription.startDate = now;
+            
+            // Recalcular data final a partir de hoje (pagamento confirmado)
+            const endDate = new Date(now);
+            endDate.setDate(endDate.getDate() + subscription.plan.durationInDays);
+            subscription.endDate = endDate;
+            
+            subscription.creditsRemaining = subscription.plan.totalCredits;
+            
+            subscription.nextPaymentDate = new Date(now);
             subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
+            
             await subscription.save();
-            console.log(`✅ Subscription ${subscription._id} ativada`);
+
+            console.log(`${logPrefix} ✅ PRIMEIRO PAGAMENTO CONFIRMADO - PLANO ATIVADO!`);
+            console.log(`${logPrefix} 👤 Cliente: ${subscription.customer?.name} (${subscription.customer?.phone})`);
+            console.log(`${logPrefix} 📦 Plano: ${subscription.plan?.name}`);
+            console.log(`${logPrefix} 📅 Validade: ${subscription.startDate.toLocaleDateString()} até ${subscription.endDate.toLocaleDateString()}`);
           }
-          // Se já está active, é renovação
+          // Se já está active, é renovação mensal
           else if (subscription.status === "active" || subscription.status === "expired") {
             const now = new Date();
             subscription.lastPaymentDate = now;
+            
+            // Renovação: define novo período a partir de hoje
             subscription.startDate = now;
-            subscription.endDate = new Date(now);
-            subscription.endDate.setDate(subscription.endDate.getDate() + subscription.plan.durationInDays);
+            const endDate = new Date(now);
+            endDate.setDate(endDate.getDate() + subscription.plan.durationInDays);
+            subscription.endDate = endDate;
+            
             subscription.creditsRemaining = subscription.plan.totalCredits;
+            
             subscription.nextPaymentDate = new Date(now);
             subscription.nextPaymentDate.setMonth(subscription.nextPaymentDate.getMonth() + 1);
             subscription.status = "active";
+            
             await subscription.save();
-            console.log(`🔄 Subscription ${subscription._id} renovada`);
+            console.log(`${logPrefix} 🔄 RENOVAÇÃO CONFIRMADA! créditos resetados para: ${subscription.creditsRemaining}`);
           }
         }
       }

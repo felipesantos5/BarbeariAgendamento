@@ -161,8 +161,20 @@ export function OperationalCostsPage() {
     const { _id, ...costData } = currentCost;
 
     // Validação
-    if (!currentCost.description || !currentCost.amount || !currentCost.date) {
-      toast.error("Descrição, valor e data são obrigatórios.");
+    if (!currentCost.description?.trim() || !currentCost.amount || currentCost.amount <= 0) {
+      if (!currentCost.description?.trim() && (!currentCost.amount || currentCost.amount <= 0)) {
+        toast.error("Por favor, preencha a descrição e o valor do custo.");
+      } else if (!currentCost.description?.trim()) {
+        toast.error("Por favor, preencha a descrição do custo.");
+      } else {
+        toast.error("Por favor, preencha o valor do custo.");
+      }
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!currentCost.date) {
+      toast.error("A data é obrigatória.");
       setIsSubmitting(false);
       return;
     }
@@ -494,7 +506,7 @@ export function OperationalCostsPage() {
               <Checkbox
                 id="isRecurring"
                 checked={currentCost.isRecurring || false}
-                onCheckedChange={(checked) =>
+                onCheckedChange={(checked: any) =>
                   setCurrentCost({
                     ...currentCost,
                     isRecurring: checked as boolean,

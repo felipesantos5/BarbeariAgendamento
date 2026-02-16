@@ -1,9 +1,21 @@
 export const PhoneFormat = (value: string = ""): string => {
-  // Adicionado valor padrão para input
-  if (!value) return ""; // Retorna string vazia se o valor for nulo/undefined/vazio
-  return value
-    .replace(/\D/g, "") // Remove tudo que não for dígito
-    .slice(0, 11) // Limita a 11 dígitos (DDD + 9 dígitos celular)
-    .replace(/^(\d{2})(\d)/, "($1) $2") // Adiciona parênteses no DDD: (XX)YYYYYYYYY
-    .replace(/(\d{5})(\d{1,4})$/, "$1-$2"); // Adiciona o hífen: (XX) YYYYY-YYYY
+  if (!value) return "";
+
+  let cleaned = value.replace(/\D/g, "");
+
+  // Se começar com 55 e tiver mais de 10 dígitos, remove o 55
+  if (cleaned.startsWith("55") && cleaned.length > 10) {
+    cleaned = cleaned.substring(2);
+  }
+
+  // Limita a 11 dígitos (DDD + 9 dígitos celular)
+  cleaned = cleaned.slice(0, 11);
+
+  if (cleaned.length === 11) {
+    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 7)}-${cleaned.substring(7)}`;
+  } else if (cleaned.length === 10) {
+    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 6)}-${cleaned.substring(6)}`;
+  }
+
+  return cleaned;
 };

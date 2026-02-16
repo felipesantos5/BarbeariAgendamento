@@ -94,7 +94,6 @@ export const cacheService = {
       const keys = await redisClient.keys(pattern);
       if (keys.length > 0) {
         await redisClient.del(...keys);
-        console.log(`🗑️ Cache invalidado: ${keys.length} chaves com padrão [${pattern}]`);
       }
       return true;
     } catch (err) {

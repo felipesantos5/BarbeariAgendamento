@@ -224,13 +224,16 @@ export function BarberPage() {
 
     // 2. Prepara o payload com os dados do barbeiro
     const validAvailability = (currentBarberForm.availability || []).filter((slot) => slot.day && slot.start && slot.end);
-    const barberDataPayload: Partial<BarberFormData> = {
+    const barberDataPayload: any = {
       name: currentBarberForm.name,
       image: finalImageUrl,
       availability: validAvailability,
       break: currentBarberForm.break,
-      commission: Number(currentBarberForm.commission),
     };
+
+    if (currentBarberForm.commission !== undefined && currentBarberForm.commission !== null && !isNaN(Number(currentBarberForm.commission))) {
+      barberDataPayload.commission = Number(currentBarberForm.commission);
+    }
 
     // Só inclui o email no payload se tiver valor (evita enviar string vazia)
     if (currentBarberForm.email && currentBarberForm.email.trim() !== "") {
@@ -369,6 +372,7 @@ export function BarberPage() {
               <TableHead className="w-[300px]">Barbeiro</TableHead>
               <TableHead className="text-left">Disponibilidade</TableHead>
               <TableHead className="text-left">Pausa</TableHead>
+              <TableHead className="text-center">Comissão</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -403,6 +407,9 @@ export function BarberPage() {
                     <span className="text-muted-foreground">Não definida</span>
                   )}
                 </TableCell>
+                <TableCell className="text-xs font-medium text-blue-600 text-center">
+                  {barber.commission || 0}%
+                </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button
                     variant="outline"
@@ -430,7 +437,7 @@ export function BarberPage() {
             ))}
             {isMobile && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center pt-4 pb-0">
+                <TableCell colSpan={5} className="text-center pt-4 pb-0">
                   <Button onClick={openAddDialog}>Adicionar</Button>
                 </TableCell>
               </TableRow>

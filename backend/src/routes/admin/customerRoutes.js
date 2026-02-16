@@ -169,6 +169,8 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
                   },
                   { $lookup: { from: "plans", localField: "plan", foreignField: "_id", as: "planDetails" } },
                   { $unwind: { path: "$planDetails", preserveNullAndEmptyArrays: true } },
+                  { $lookup: { from: "barbers", localField: "barber", foreignField: "_id", as: "barberDetails" } },
+                  { $unwind: { path: "$barberDetails", preserveNullAndEmptyArrays: true } },
                 ],
                 as: "activeSubscriptions",
               },
@@ -179,6 +181,7 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
                 _id: "$customerDetails._id",
                 name: "$customerDetails.name",
                 phone: "$customerDetails.phone",
+                email: "$customerDetails.email",
                 imageUrl: "$customerDetails.imageUrl",
                 createdAt: "$customerDetails.createdAt",
                 lastBookingTime: "$lastBookingTime",
@@ -196,6 +199,10 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
                         _id: "$$sub.planDetails._id",
                         name: "$$sub.planDetails.name",
                         totalCredits: { $ifNull: ["$$sub.planDetails.totalCredits", 0] },
+                      },
+                      barber: {
+                        _id: "$$sub.barberDetails._id",
+                        name: { $ifNull: ["$$sub.barberDetails.name", "Todos os barbeiros"] },
                       },
                       creditsRemaining: { $ifNull: ["$$sub.creditsRemaining", 0] },
                       creditsUsed: {

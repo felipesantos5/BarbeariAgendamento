@@ -194,7 +194,7 @@ export function BarberPerformancePage() {
               </SelectContent>
             </Select>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-full sm:w-[120px]">
+              <SelectTrigger className="sm:w-[140px]">
                 <SelectValue placeholder="Ano" />
               </SelectTrigger>
               <SelectContent>
@@ -208,142 +208,141 @@ export function BarberPerformancePage() {
             </Select>
           </div>
         </CardHeader>
+        <CardContent>
+          {isLoading && (
+            <div className="flex justify-center items-center py-20 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <span className="text-muted-foreground">Calculando performance...</span>
+            </div>
+          )}
 
-        {isLoading && (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Calculando performance...</span>
-          </div>
-        )}
-
-        {error && !isLoading && (
-          <CardContent>
+          {error && !isLoading && (
             <p className="text-destructive text-center">{error}</p>
-          </CardContent>
-        )}
+          )}
 
-        {/* ✅ ATUALIZADO (2/3): Seção de Métricas */}
-        {data && !isLoading && !error && (
-          <CardContent className="space-y-6">
-            {/* Card principal com a comissão total (EM DESTAQUE) */}
-            <Card className="mb-6 bg-purple-50 border-purple-200 shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-purple-800">Sua Comissão Total no Período</CardTitle>
-                <BadgePercent className="h-5 w-5 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-4xl font-bold text-purple-700">{PriceFormater(data.overview.totalCommission)}</div>
-                <p className="text-xs text-purple-600">
-                  {PriceFormater(data.overview.totalServiceCommission)} (Serviços) + {PriceFormater(data.overview.totalPlanCommission)} (Planos) +{" "}
-                  {PriceFormater(data.overview.totalProductCommission)} (Produtos)
-                </p>
-              </CardContent>
-            </Card>
+          {/* ✅ ATUALIZADO (2/3): Seção de Métricas */}
+          {data && !isLoading && !error && (
+            <div className="space-y-6">
+              {/* Card principal com a comissão total (EM DESTAQUE) */}
+              <Card className="mb-6 bg-purple-50 border-purple-200 shadow-lg">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-purple-800">Sua Comissão Total no Período</CardTitle>
+                  <BadgePercent className="h-5 w-5 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-4xl font-bold text-purple-700">{PriceFormater(data.overview.totalCommission)}</div>
+                  <p className="text-xs text-purple-600">
+                    {PriceFormater(data.overview.totalServiceCommission)} (Serviços) + {PriceFormater(data.overview.totalPlanCommission)} (Planos) +{" "}
+                    {PriceFormater(data.overview.totalProductCommission)} (Produtos)
+                  </p>
+                </CardContent>
+              </Card>
 
-            {/* --- Seção Serviços e Planos --- */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                <Scissors size={20} />
-                Métricas de Atendimento e Planos
-              </h3>
-              {/* Grid ATUALIZADA (sem Ticket Médio, com Planos) */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard
-                  title="Receita de Serviços"
-                  value={PriceFormater(data.overview.totalServiceRevenue)}
-                  icon={Scissors}
-                  description={`${data.overview.totalBookings} agendamentos concluídos`}
-                  valueClassName="text-green-600"
-                />
-                <MetricCard
-                  title="Comissão (Serviços)"
-                  value={PriceFormater(data.overview.totalServiceCommission)}
-                  icon={BadgePercent}
-                  description={`Baseado em ${data.overview.serviceCommissionRate}% da receita`}
-                  valueClassName="text-gray-700"
-                />
-                <MetricCard
-                  title="Comissão (Planos)"
-                  value={PriceFormater(data.overview.totalPlanCommission)}
-                  icon={Package} // Ícone de plano
-                  description={`${data.overview.totalPlansSold} plano(s) vendido(s)`} // Descrição
-                  valueClassName="text-violet-600" // Cor
-                />
-                <MetricCard title="Clientes Únicos" value={data.overview.totalUniqueCustomers} icon={Users} description="Clientes que você atendeu" />
+              {/* --- Seção Serviços e Planos --- */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                  <Scissors size={20} />
+                  Métricas de Atendimento e Planos
+                </h3>
+                {/* Grid ATUALIZADA (sem Ticket Médio, com Planos) */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard
+                    title="Receita de Serviços"
+                    value={PriceFormater(data.overview.totalServiceRevenue)}
+                    icon={Scissors}
+                    description={`${data.overview.totalBookings} agendamentos concluídos`}
+                    valueClassName="text-green-600"
+                  />
+                  <MetricCard
+                    title="Comissão (Serviços)"
+                    value={PriceFormater(data.overview.totalServiceCommission)}
+                    icon={BadgePercent}
+                    description={`Baseado em ${data.overview.serviceCommissionRate}% da receita`}
+                    valueClassName="text-gray-700"
+                  />
+                  <MetricCard
+                    title="Comissão (Planos)"
+                    value={PriceFormater(data.overview.totalPlanCommission)}
+                    icon={Package} // Ícone de plano
+                    description={`${data.overview.totalPlansSold} plano(s) vendido(s)`} // Descrição
+                    valueClassName="text-violet-600" // Cor
+                  />
+                  <MetricCard title="Clientes Únicos" value={data.overview.totalUniqueCustomers} icon={Users} description="Clientes que você atendeu" />
+                </div>
               </div>
-            </div>
 
-            <Separator />
+              <Separator />
 
-            {/* --- Seção Produtos --- */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                <ShoppingCart size={20} />
-                Métricas de Produtos
-              </h3>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCard
-                  title="Produtos Vendidos"
-                  value={data.overview.totalProductsSold}
-                  icon={ShoppingCart}
-                  description="Itens vendidos por você"
-                />
-                <MetricCard
-                  title="Receita de Produtos"
-                  value={PriceFormater(data.overview.totalProductRevenue)}
-                  icon={Banknote}
-                  description="Valor total dos produtos"
-                  valueClassName="text-green-600"
-                />
-                <MetricCard
-                  title="Comissão (Produtos)"
-                  value={PriceFormater(data.overview.totalProductCommission)}
-                  icon={BadgePercent}
-                  description="Comissão das vendas de produtos"
-                  valueClassName="text-gray-700"
-                />
+              {/* --- Seção Produtos --- */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                  <ShoppingCart size={20} />
+                  Métricas de Produtos
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <MetricCard
+                    title="Produtos Vendidos"
+                    value={data.overview.totalProductsSold}
+                    icon={ShoppingCart}
+                    description="Itens vendidos por você"
+                  />
+                  <MetricCard
+                    title="Receita de Produtos"
+                    value={PriceFormater(data.overview.totalProductRevenue)}
+                    icon={Banknote}
+                    description="Valor total dos produtos"
+                    valueClassName="text-green-600"
+                  />
+                  <MetricCard
+                    title="Comissão (Produtos)"
+                    value={PriceFormater(data.overview.totalProductCommission)}
+                    icon={BadgePercent}
+                    description="Comissão das vendas de produtos"
+                    valueClassName="text-gray-700"
+                  />
+                </div>
               </div>
-            </div>
 
-            <Separator />
+              <Separator />
 
-            {/* ✅ ATUALIZADO (3/3): Tabela de Serviços (Título) */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
-                <Scissors size={20} />
-                Serviços Realizados (Detalhado)
-              </h3>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Serviço</TableHead>
-                      <TableHead className="text-center">Quantidade</TableHead>
-                      <TableHead className="text-right">Receita Gerada</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.serviceBreakdown.length > 0 ? (
-                      data.serviceBreakdown.map((service) => (
-                        <TableRow key={service.serviceId}>
-                          <TableCell className="font-medium">{service.serviceName}</TableCell>
-                          <TableCell className="text-center">{service.count}</TableCell>
-                          <TableCell className="text-right font-semibold">{PriceFormater(service.revenueFromService)}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
+              {/* ✅ ATUALIZADO (3/3): Tabela de Serviços (Título) */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary flex items-center gap-2">
+                  <Scissors size={20} />
+                  Serviços Realizados (Detalhado)
+                </h3>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                          Nenhum serviço realizado neste período.
-                        </TableCell>
+                        <TableHead>Serviço</TableHead>
+                        <TableHead className="text-center">Quantidade</TableHead>
+                        <TableHead className="text-right">Receita Gerada</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.serviceBreakdown.length > 0 ? (
+                        data.serviceBreakdown.map((service) => (
+                          <TableRow key={service.serviceId}>
+                            <TableCell className="font-medium">{service.serviceName}</TableCell>
+                            <TableCell className="text-center">{service.count}</TableCell>
+                            <TableCell className="text-right font-semibold">{PriceFormater(service.revenueFromService)}</TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                            Nenhum serviço realizado neste período.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             </div>
-          </CardContent>
-        )}
+          )}
+        </CardContent>
       </Card>
     </div>
   );

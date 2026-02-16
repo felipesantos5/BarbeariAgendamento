@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import compression from "compression";
 import "dotenv/config";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -35,9 +36,12 @@ import leadRoutes from "./routes/form/lead.routes.js";
 import authSuperAdminRoutes from "./routes/authSuperAdminRoutes.js";
 import superAdminRoutes from "./routes/superAdminRoutes.js";
 import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
+import whatsappRoutes from "./routes/whatsappRoutes.js";
+import billingRoutes from "./routes/billingRoutes.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
+import { globalLimiter } from "./middleware/rateLimiting.js";
 
 import { stopAllCronJobs } from "./services/schedulerService.js";
 
@@ -85,6 +89,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+app.use(compression()); // Gzip compression
+app.use(globalLimiter); // DDoS Protection
+
 app.use(helmet());
 app.use(cookieParser());
 app.use(express.json());
@@ -124,6 +131,7 @@ app.use("/api/barbershops/:barbershopId/dashboard-metrics", protectAdmin, checkA
 app.use("/api/barbershops/:barbershopId/barber-performance", protectAdmin, checkAccountStatus, barberPerformanceRoutes);
 app.use("/api/barbershops/:barbershopId/admin/bookings", protectAdmin, checkAccountStatus, manualBookingRoutes);
 app.use("/api/barbershops/:barbershopId/admin/operational-costs", operationalCostRoutes);
+app.use("/api/barbershops/:barbershopId/whatsapp", protectAdmin, checkAccountStatus, whatsappRoutes);
 
 // Form
 app.use('/api/leads', leadRoutes);
@@ -131,6 +139,7 @@ app.use('/api/leads', leadRoutes);
 // Super Admin
 app.use("/api/auth/superadmin", authSuperAdminRoutes);
 app.use("/api/superadmin", protectSuperAdmin, superAdminRoutes);
+app.use("/api/superadmin/billing", protectSuperAdmin, billingRoutes);
 
 // --- Global Error Handler ---
 // Captura qualquer erro nao tratado nas rotas e retorna 500 limpo

@@ -28,7 +28,10 @@ export const protectCustomer = async (req, res, next) => {
       // 5. Continua para a próxima função (a rota principal)
       next();
     } catch (error) {
-      console.error("Erro na autenticação do token do cliente:", error);
+      // Log apenas erros que não sejam token expirado (é esperado e normal)
+      if (error.name !== "TokenExpiredError") {
+        console.error("Erro na autenticação do token do cliente:", error);
+      }
       return res.status(401).json({ error: "Não autorizado, token inválido." });
     }
   }

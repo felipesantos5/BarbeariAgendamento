@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CreditCard,
   Receipt,
+  Bell,
 } from "lucide-react"; // Ícones de exemplo
 import { useAuth } from "@/contexts/AuthContext";
 import apiClient from "@/services/api";
@@ -258,6 +259,12 @@ export function AdminLayout() {
           icon: <Package className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
+        {
+          to: "custos-operacionais",
+          label: "Custos Operacionais",
+          icon: <Receipt className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
       ],
     },
     {
@@ -271,15 +278,15 @@ export function AdminLayout() {
           roles: ["admin"],
         },
         {
-          to: "checkout",
-          label: "Pagamento",
-          icon: <CreditCard className="mr-2 h-4 w-4" />,
+          to: "whatsapp",
+          label: "Notificações",
+          icon: <Bell className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
         {
-          to: "custos-operacionais",
-          label: "Custos Operacionais",
-          icon: <Receipt className="mr-2 h-4 w-4" />,
+          to: "checkout",
+          label: "Pagamento",
+          icon: <CreditCard className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
         {
