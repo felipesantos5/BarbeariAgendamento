@@ -224,13 +224,16 @@ export function BarberPage() {
 
     // 2. Prepara o payload com os dados do barbeiro
     const validAvailability = (currentBarberForm.availability || []).filter((slot) => slot.day && slot.start && slot.end);
-    const barberDataPayload: Partial<BarberFormData> = {
+    const barberDataPayload: any = {
       name: currentBarberForm.name,
       image: finalImageUrl,
       availability: validAvailability,
       break: currentBarberForm.break,
-      commission: Number(currentBarberForm.commission),
     };
+
+    if (currentBarberForm.commission !== undefined && currentBarberForm.commission !== null && !isNaN(Number(currentBarberForm.commission))) {
+      barberDataPayload.commission = Number(currentBarberForm.commission);
+    }
 
     // Só inclui o email no payload se tiver valor (evita enviar string vazia)
     if (currentBarberForm.email && currentBarberForm.email.trim() !== "") {

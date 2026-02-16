@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { API_BASE_URL } from "@/config/BackendUrl";
+import superAdminApiClient from "@/services/superAdminApi";
 import { useSuperAdminAuth } from "@/contexts/SuperAdminAuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,32 +13,32 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   DollarSign,
-  TrendingDown,
   TrendingUp,
+  TrendingDown,
   RefreshCw,
-  AlertCircle,
   Plus,
   MoreVertical,
-  Pencil,
   Trash2,
+  Pencil
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ManageExpenseModal } from "@/components/ManageExpenseModal";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ManageExpenseModal } from "@/components/ManageExpenseModal";
 
 interface Expense {
   _id: string;
   name: string;
-  description?: string;
   amount: number;
-  type: "monthly" | "one-time";
   category: string;
+  type: "monthly" | "one-time";
+  description?: string;
+  createdAt: string;
   date?: string;
   startDate?: string;
   endDate?: string | null;
@@ -47,42 +47,33 @@ interface Expense {
 }
 
 interface ExpensesOverview {
+  expenses: Expense[];
   nextMonthRevenue: number;
   nextMonthExpenses: number;
   projectedProfit: number;
-  monthlyExpenses: number;
-  oneTimeExpenses: number;
-  totalExpenses: number;
-  expenses: Expense[];
 }
 
 export function SuperAdminExpensesPage() {
+  const today = new Date();
   const [data, setData] = useState<ExpensesOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<{ month: number; year: number }>({
+    month: today.getMonth(),
+    year: today.getFullYear(),
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const { token } = useSuperAdminAuth();
 
   const fetchData = async () => {
     setIsLoading(true);
-    setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/superadmin/billing/expenses/overview`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar dados");
-      }
-
-      const result = await response.json();
-      setData(result);
-    } catch (err: any) {
-      setError(err.message || "Erro ao carregar dados");
+      const response = await superAdminApiClient.get(
+        `/api/superadmin/billing/expenses/overview?month=${filter.month}&year=${filter.year}`
+      );
+      setData(response.data);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -90,36 +81,7 @@ export function SuperAdminExpensesPage() {
 
   useEffect(() => {
     fetchData();
-  }, [token]);
-
-  const handleCreate = () => {
-    setSelectedExpense(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (expense: Expense) => {
-    setSelectedExpense(expense);
-    setModalOpen(true);
-  };
-
-  const handleDelete = async (expenseId: string) => {
-    if (!window.confirm("Tem certeza que deseja deletar esta despesa?")) return;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/superadmin/billing/expenses/${expenseId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-      });
-
-      if (!response.ok) throw new Error("Erro ao deletar despesa");
-      fetchData();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
+  }, [token, filter]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -128,38 +90,48 @@ export function SuperAdminExpensesPage() {
     }).format(value);
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    const [year, month, day] = dateString.split('T')[0].split('-').map(Number);
-    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+  const handleCreate = () => {
+    setSelectedExpense(null);
+    // Pequeno atraso para consistência com handleEdit e evitar conflitos de foco
+    setTimeout(() => {
+      setModalOpen(true);
+    }, 100);
   };
 
-  const getTypeBadge = (type: string) => {
-    const typeMap: Record<string, { label: string; className: string }> = {
-      monthly: { label: "Mensal", className: "bg-blue-600 hover:bg-blue-600" },
-      "one-time": { label: "Esporádico", className: "bg-purple-600 hover:bg-purple-600" },
-    };
-
-    const config = typeMap[type] || { label: type, className: "bg-gray-600" };
-    return <Badge className={config.className}>{config.label}</Badge>;
+  const handleEdit = (expense: Expense) => {
+    setSelectedExpense(expense);
+    // Pequeno atraso para fechar o dropdown antes de abrir o modal
+    setTimeout(() => {
+      setModalOpen(true);
+    }, 100);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-slate-400">Carregando dados...</div>
-      </div>
-    );
-  }
+  const handleDelete = async (id: string) => {
+    // Pequeno atraso para garantir que o dropdown fechou antes do confirm() do browser
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
+    try {
+      await superAdminApiClient.delete(`/api/superadmin/billing/expenses/${id}`);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  if (error) {
+  const months = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
+  const years = Array.from({ length: 5 }, (_, i) => today.getFullYear() - i);
+
+  if (isLoading && !data) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
-        <AlertCircle className="w-12 h-12 text-red-400" />
-        <p className="text-red-400">{error}</p>
-        <Button onClick={fetchData} variant="outline">
-          Tentar novamente
-        </Button>
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+          <div className="text-slate-400 font-medium">Carregando despesas...</div>
+        </div>
       </div>
     );
   }
@@ -168,23 +140,52 @@ export function SuperAdminExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Despesas</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Despesas</h1>
+          <p className="text-slate-400 text-sm">Gerenciamento de custos operacionais</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center bg-slate-800 border border-slate-700 p-1 px-2 rounded-lg gap-2">
+            <select
+              value={filter.month}
+              onChange={(e) => setFilter(prev => ({ ...prev, month: parseInt(e.target.value) }))}
+              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+            >
+              {months.map((m, i) => (
+                <option key={m} value={i} className="bg-slate-900">{m}</option>
+              ))}
+            </select>
+
+            <div className="w-px h-3 bg-slate-700" />
+
+            <select
+              value={filter.year}
+              onChange={(e) => setFilter(prev => ({ ...prev, year: parseInt(e.target.value) }))}
+              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+            >
+              {years.map(y => (
+                <option key={y} value={y} className="bg-slate-900">{y}</option>
+              ))}
+            </select>
+          </div>
+
           <Button
             onClick={handleCreate}
             variant="default"
             size="sm"
-            className="bg-blue-600 hover:bg-blue-700 text-white"
+            className="bg-blue-500 hover:bg-blue-600 text-white font-bold"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nova Despesa
           </Button>
+
           <Button
             onClick={fetchData}
             variant="outline"
             size="sm"
-            className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+            className="bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
@@ -194,54 +195,51 @@ export function SuperAdminExpensesPage() {
 
       {/* Cards de resumo */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">
-              Receita Próximo Mês
+        <Card className="bg-slate-900/40 border-slate-800/60 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Receita Período
             </CardTitle>
-            <DollarSign className="h-4 w-4 text-green-400" />
+            <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400">
+              <DollarSign className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-xl font-bold text-slate-100 italic">
               {formatCurrency(data?.nextMonthRevenue || 0)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Assinaturas ativas
-            </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">
-              Despesas Próximo Mês
+        <Card className="bg-slate-900/40 border-slate-800/60 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Despesas Período
             </CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-400" />
+            <div className="p-1.5 rounded-md bg-rose-500/10 text-rose-400">
+              <TrendingDown className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">
+            <div className="text-xl font-bold text-slate-100">
               {formatCurrency(data?.nextMonthExpenses || 0)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Gastos previstos
-            </p>
           </CardContent>
         </Card>
 
-        <Card className={`bg-slate-800 border-slate-700 ${profitIsPositive ? 'border-green-600' : 'border-red-600'}`}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">
-              Lucro Projetado
+        <Card className="bg-slate-900/40 border-slate-800/60 backdrop-blur-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Lucro Estimado
             </CardTitle>
-            <TrendingUp className={`h-4 w-4 ${profitIsPositive ? 'text-green-400' : 'text-red-400'}`} />
+            <div className={`p-1.5 rounded-md ${profitIsPositive ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+              <TrendingUp className={`h-4 w-4 ${profitIsPositive ? 'text-emerald-400' : 'text-rose-400'}`} />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${profitIsPositive ? 'text-green-400' : 'text-red-400'}`}>
+            <div className={`text-xl font-bold ${profitIsPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
               {formatCurrency(data?.projectedProfit || 0)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Receita - Despesas
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -249,7 +247,7 @@ export function SuperAdminExpensesPage() {
       {/* Tabela de despesas */}
       <Card className="bg-slate-800 border-slate-700">
         <CardHeader>
-          <CardTitle className="text-white">Todas as Despesas</CardTitle>
+          <CardTitle className="text-white text-lg">Lançamentos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border border-slate-700 overflow-x-auto">
@@ -258,10 +256,9 @@ export function SuperAdminExpensesPage() {
                 <TableRow className="border-slate-700 hover:bg-slate-700/50">
                   <TableHead className="text-slate-400">Nome</TableHead>
                   <TableHead className="text-slate-400">Categoria</TableHead>
-                  <TableHead className="text-slate-400 text-right">Valor</TableHead>
+                  <TableHead className="text-slate-400 text-right px-6">Valor</TableHead>
                   <TableHead className="text-slate-400 text-center">Tipo</TableHead>
-                  <TableHead className="text-slate-400">Data/Período</TableHead>
-                  <TableHead className="text-slate-400 text-center">Status</TableHead>
+                  <TableHead className="text-slate-400">Status</TableHead>
                   <TableHead className="text-slate-400 text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -269,33 +266,30 @@ export function SuperAdminExpensesPage() {
                 {data?.expenses.map((expense) => (
                   <TableRow
                     key={expense._id}
-                    className="border-slate-700 hover:bg-slate-700/50"
+                    className={`border-slate-700 hover:bg-slate-700/50 transition-colors ${(expense as any).isActiveInPeriod ? '' : 'opacity-40'}`}
                   >
-                    <TableCell className="font-medium text-white">
-                      <div>
-                        <div>{expense.name}</div>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-slate-200 font-medium">{expense.name}</span>
                         {expense.description && (
-                          <div className="text-xs text-slate-500">{expense.description}</div>
+                          <span className="text-[10px] text-slate-500 max-w-[200px] truncate">{expense.description}</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-slate-300">{expense.category}</TableCell>
-                    <TableCell className="text-right text-red-400 font-semibold">
+                    <TableCell>
+                      <Badge variant="outline" className="bg-slate-900 border-slate-700 text-slate-400 text-[10px] px-2 py-0">
+                        {expense.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right px-6 font-bold text-rose-400 font-mono">
                       {formatCurrency(expense.amount)}
                     </TableCell>
                     <TableCell className="text-center">
-                      {getTypeBadge(expense.type)}
+                      <div className={`mx-auto w-2 h-2 rounded-full ${expense.type === 'monthly' ? 'bg-blue-500' : 'bg-purple-500'}`} />
                     </TableCell>
-                    <TableCell className="text-slate-300">
-                      {expense.type === "one-time" && expense.date
-                        ? formatDate(expense.date)
-                        : expense.startDate
-                          ? `Desde ${formatDate(expense.startDate)}`
-                          : "-"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge className={expense.isActive ? "bg-green-600 hover:bg-green-600" : "bg-gray-600 hover:bg-gray-600"}>
-                        {expense.isActive ? "Ativo" : "Inativo"}
+                    <TableCell>
+                      <Badge className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase border-none ${(expense as any).isActiveInPeriod ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800/50 text-slate-500'}`}>
+                        {(expense as any).isActiveInPeriod ? 'Incidente' : 'Ignorado'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-center">
@@ -311,24 +305,24 @@ export function SuperAdminExpensesPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
-                          className="bg-slate-800 border-slate-700 text-white"
+                          className="bg-slate-800 border-slate-700 text-white min-w-[140px]"
                         >
                           <DropdownMenuItem
                             onClick={() => handleEdit(expense)}
-                            className="cursor-pointer hover:bg-slate-700 focus:bg-slate-700"
+                            className="cursor-pointer hover:bg-slate-700 focus:bg-slate-700 gap-2"
                           >
-                            <Pencil className="w-4 h-4 mr-2 text-blue-400" />
-                            Editar
+                            <Pencil className="w-4 h-4 text-blue-400" />
+                            <span className="text-xs">Editar</span>
                           </DropdownMenuItem>
 
                           <DropdownMenuSeparator className="bg-slate-700" />
 
                           <DropdownMenuItem
                             onClick={() => handleDelete(expense._id)}
-                            className="cursor-pointer hover:bg-red-900/30 focus:bg-red-900/30 text-red-400"
+                            className="cursor-pointer hover:bg-red-900/10 focus:bg-red-900/10 text-red-500 gap-2 font-bold"
                           >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Deletar
+                            <Trash2 className="w-4 h-4" />
+                            <span className="text-xs">Excluir</span>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -337,8 +331,8 @@ export function SuperAdminExpensesPage() {
                 ))}
                 {(!data?.expenses || data.expenses.length === 0) && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500 py-8">
-                      Nenhuma despesa cadastrada
+                    <TableCell colSpan={6} className="text-center py-12 text-slate-500">
+                      Nenhuma despesa registrada para o período
                     </TableCell>
                   </TableRow>
                 )}
@@ -351,9 +345,8 @@ export function SuperAdminExpensesPage() {
       <ManageExpenseModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        expense={selectedExpense}
+        expense={selectedExpense as any}
         onSuccess={fetchData}
-        token={token || ""}
       />
     </div>
   );

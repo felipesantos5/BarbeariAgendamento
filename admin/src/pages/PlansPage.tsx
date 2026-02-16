@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Edit, Trash2, Loader2, HelpCircle, CreditCard, Users, TrendingUp } from "lucide-react";
 import { PriceFormater } from "@/helper/priceFormater";
+import { PhoneFormat } from "@/helper/phoneFormater";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -406,7 +407,7 @@ export function PlansPage() {
                           <TableCell>
                             <div>
                               <p className="font-medium">{subscription.customer.name}</p>
-                              <p className="text-xs text-muted-foreground">{subscription.customer.phone}</p>
+                              <p className="text-xs text-muted-foreground">{PhoneFormat(subscription.customer.phone)}</p>
                             </div>
                           </TableCell>
                           <TableCell>

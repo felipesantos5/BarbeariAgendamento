@@ -194,7 +194,7 @@ export function BarberPerformancePage() {
               </SelectContent>
             </Select>
             <Select value={selectedYear} onValueChange={setSelectedYear}>
-              <SelectTrigger className="w-full sm:w-[120px]">
+              <SelectTrigger className="sm:w-[140px]">
                 <SelectValue placeholder="Ano" />
               </SelectTrigger>
               <SelectContent>

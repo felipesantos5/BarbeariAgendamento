@@ -215,7 +215,7 @@ router.post("/", appointmentLimiter, async (req, res) => {
       const cleanPhoneNumber = barbershop.contact.replace(/\D/g, "");
       const whatsappLink = `https://wa.me/55${cleanPhoneNumber}`;
       const locationLink = `https://barbeariagendamento.com.br/localizacao/${barbershop._id}`;
-      const message = `Olá, ${customer.name}! Seu agendamento na ${barbershop.name} foi confirmado com sucesso para ${formattedTime} ✅\n\nPara mais informações, entre em contato com a barbearia:\n${whatsappLink}\n\n📍 Ver no mapa:\n${locationLink}\n\nNosso time te aguarda! 💈`;
+      const message = `Olá, ${customer.name}! Seu agendamento na ${barbershop.name} foi confirmado para ${formattedTime} ✅\n\n 📍 Ver no mapa:\n${locationLink}\n\nNosso time te aguarda! 💈`;
       sendWhatsAppMessage(barbershopId, customer.phone, message);
 
       res.status(201).json(createdBooking);

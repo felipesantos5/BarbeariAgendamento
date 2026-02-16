@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import superAdminApiClient from "@/services/superAdminApi";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { API_BASE_URL } from "@/config/BackendUrl";
+
 
 interface ManagePlanModalProps {
   open: boolean;
@@ -25,7 +26,6 @@ interface ManagePlanModalProps {
     startDate: string;
   } | null;
   onSuccess: () => void;
-  token: string;
 }
 
 export function ManagePlanModal({
@@ -35,7 +35,6 @@ export function ManagePlanModal({
   barbershopName,
   currentSubscription,
   onSuccess,
-  token,
 }: ManagePlanModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,57 +81,31 @@ export function ManagePlanModal({
 
       if (currentSubscription) {
         // Atualizar assinatura existente
-        const response = await fetch(
-          `${API_BASE_URL}/api/superadmin/billing/subscriptions/${currentSubscription._id}`,
+        await superAdminApiClient.put(
+          `/api/superadmin/billing/subscriptions/${currentSubscription._id}`,
           {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              planName: formData.planName,
-              monthlyPrice: price,
-              startDate: formData.startDate,
-            }),
+            planName: formData.planName,
+            monthlyPrice: price,
+            startDate: formData.startDate,
           }
         );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Erro ao atualizar plano");
-        }
       } else {
         // Criar nova assinatura
-        const response = await fetch(
-          `${API_BASE_URL}/api/superadmin/billing/subscriptions`,
+        await superAdminApiClient.post(
+          `/api/superadmin/billing/subscriptions`,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: "include",
-            body: JSON.stringify({
-              barbershopId,
-              customPlanName: formData.planName,
-              monthlyPrice: price,
-              startDate: formData.startDate,
-            }),
+            barbershopId,
+            customPlanName: formData.planName,
+            monthlyPrice: price,
+            startDate: formData.startDate,
           }
         );
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Erro ao criar plano");
-        }
       }
 
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || "Erro ao salvar plano");
+      setError(err.response?.data?.error || err.message || "Erro ao salvar plano");
     } finally {
       setIsLoading(false);
     }

@@ -9,8 +9,11 @@ import Subscription from "../models/Subscription.js";
 import { BarbershopCreationSchema } from "../validations/barbershopValidation.js";
 import { z } from "zod";
 import "dotenv/config";
+import { timingSafeCompare } from "../utils/security.js";
 
 const router = express.Router();
+const ROOT_PASSWORD = process.env.ROOT_PASSWORD;
+
 
 // Calcula qual dia do trial a barbearia está
 function calcularDiaDoTrial(trialEndsAt) {
@@ -91,9 +94,8 @@ router.get("/barbershops-overview", async (req, res) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    // Busca todas as barbearias
     const barbershops = await Barbershop.find({})
-      .select("name slug accountStatus isTrial trialEndsAt createdAt")
+      .select("name slug accountStatus isTrial trialEndsAt createdAt isArchived")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -146,6 +148,7 @@ router.get("/barbershops-overview", async (req, res) => {
         accountStatus: shop.accountStatus,
         isTrial: shop.isTrial,
         trialEndsAt: shop.trialEndsAt,
+        isArchived: shop.isArchived || false,
         trialDayNumber: shop.isTrial ? calcularDiaDoTrial(shop.trialEndsAt) : null,
         createdAt: shop.createdAt,
         adminEmail: adminEmailMap[shopId] || null,
@@ -156,21 +159,25 @@ router.get("/barbershops-overview", async (req, res) => {
       };
     });
 
-    // Calcula totais
-    const totalBarbershops = barbershops.length;
+    // Calcula totais (Excluindo arquivadas)
+    const activeShops = barbershops.filter(s => !s.isArchived);
+    
+    const totalBarbershops = activeShops.length;
     const totalBookings = bookingStats.reduce((acc, s) => acc + s.totalBookings, 0);
-    const activeTrials = barbershops.filter(
+    const activeTrials = activeShops.filter(
       (s) => s.isTrial && s.accountStatus === "trial"
     ).length;
-    const inactiveAccounts = barbershops.filter(
+    const inactiveAccounts = activeShops.filter(
       (s) => s.accountStatus === "inactive"
     ).length;
+    const totalArchived = barbershops.filter(s => s.isArchived).length;
 
     res.json({
       totalBarbershops,
       totalBookings,
       activeTrials,
       inactiveAccounts,
+      totalArchived,
       barbershops: barbershopsWithMetrics,
     });
   } catch (error) {
@@ -183,11 +190,27 @@ router.get("/barbershops-overview", async (req, res) => {
 router.delete("/barbershops/:barbershopId", async (req, res) => {
   try {
     const { barbershopId } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: "A senha do Super Admin é necessária para exclusão permanentemente." });
+    }
+
+    // Verifica a senha root
+    const isValid = timingSafeCompare(password, ROOT_PASSWORD);
+    if (!isValid) {
+      return res.status(401).json({ error: "Senha do Super Admin incorreta. Operação cancelada." });
+    }
 
     // Verifica se a barbearia existe
     const barbershop = await Barbershop.findById(barbershopId);
     if (!barbershop) {
       return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    // Proteção extra: não deletar se não estiver arquivada primeiro (opcional, mas recomendado)
+    if (!barbershop.isArchived) {
+      return res.status(400).json({ error: "Para deletar uma barbearia permanentemente, ela deve ser arquivada primeiro como medida de segurança." });
     }
 
     // Deleta todos os dados relacionados
@@ -203,12 +226,13 @@ router.delete("/barbershops/:barbershopId", async (req, res) => {
     // Deleta a barbearia
     await Barbershop.findByIdAndDelete(barbershopId);
 
-    res.json({ message: "Barbearia e todos os dados relacionados foram deletados." });
+    res.json({ message: "Barbearia e todos os dados relacionados foram deletados permanentemente." });
   } catch (error) {
     console.error("Erro ao deletar barbearia:", error);
     res.status(500).json({ error: "Erro ao deletar barbearia." });
   }
 });
+
 
 // PATCH /api/superadmin/barbershops/:barbershopId/status - Gerenciar status e trial
 router.patch("/barbershops/:barbershopId/status", async (req, res) => {
@@ -293,6 +317,32 @@ router.patch("/barbershops/:barbershopId/toggle-status", async (req, res) => {
   } catch (error) {
     console.error("Erro ao alterar status da barbearia:", error);
     res.status(500).json({ error: "Erro ao alterar status da barbearia." });
+  }
+});
+
+// PATCH /api/superadmin/barbershops/:barbershopId/archive - Arquivar/Desarquivar barbearia
+router.patch("/barbershops/:barbershopId/archive", async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    barbershop.isArchived = !barbershop.isArchived;
+    await barbershop.save();
+
+    res.json({
+      message: `Barbearia ${barbershop.isArchived ? "arquivada" : "restaurada"} com sucesso.`,
+      barbershop: {
+        _id: barbershop._id,
+        isArchived: barbershop.isArchived,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao arquivar barbearia:", error);
+    res.status(500).json({ error: "Erro ao processar arquivamento." });
   }
 });
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { API_BASE_URL } from "@/config/BackendUrl";
+import superAdminApiClient from "@/services/superAdminApi";
 import { useSuperAdminAuth } from "@/contexts/SuperAdminAuthContext";
+
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
     description: "",
     contact: "",
   });
-  const { token } = useSuperAdminAuth();
+  const { } = useSuperAdminAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,44 +40,30 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
     setError(null);
 
     try {
-
-      const response = await fetch(`${API_BASE_URL}/api/superadmin/barbershops`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      await superAdminApiClient.post("/api/superadmin/barbershops", {
+        name: formData.name,
+        slug: formData.slug,
+        adminEmail: formData.adminEmail,
+        adminPassword: formData.adminPassword,
+        description: formData.description,
+        contact: formData.contact,
+        address: {
+          cep: "",
+          estado: "",
+          cidade: "",
+          bairro: "",
+          rua: "",
+          numero: "",
         },
-        credentials: "include",
-        body: JSON.stringify({
-          name: formData.name,
-          slug: formData.slug,
-          adminEmail: formData.adminEmail,
-          adminPassword: formData.adminPassword,
-          description: formData.description,
-          contact: formData.contact,
-          address: {
-            cep: "",
-            estado: "",
-            cidade: "",
-            bairro: "",
-            rua: "",
-            numero: "",
-          },
-          workingHours: [
-            { day: "Segunda", start: "09:00", end: "18:00" },
-            { day: "Terça", start: "09:00", end: "18:00" },
-            { day: "Quarta", start: "09:00", end: "18:00" },
-            { day: "Quinta", start: "09:00", end: "18:00" },
-            { day: "Sexta", start: "09:00", end: "18:00" },
-            { day: "Sábado", start: "09:00", end: "14:00" },
-          ],
-        }),
+        workingHours: [
+          { day: "Segunda", start: "09:00", end: "18:00" },
+          { day: "Terça", start: "09:00", end: "18:00" },
+          { day: "Quarta", start: "09:00", end: "18:00" },
+          { day: "Quinta", start: "09:00", end: "18:00" },
+          { day: "Sexta", start: "09:00", end: "18:00" },
+          { day: "Sábado", start: "09:00", end: "14:00" },
+        ],
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erro ao criar barbearia");
-      }
 
       // Limpa o formulário
       setFormData({
@@ -116,68 +103,54 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Nova Barbearia</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Preencha os dados para criar uma nova barbearia e seu administrador.
+      <DialogContent className="bg-slate-900/95 border-slate-800 text-white max-w-2xl max-h-[90vh] overflow-y-auto backdrop-blur-xl shadow-2xl">
+        <DialogHeader className="space-y-3 pb-4 border-b border-slate-800/50">
+          <DialogTitle className="text-2xl font-bold tracking-tight">Nova Barbearia</DialogTitle>
+          <DialogDescription className="text-slate-400 text-sm leading-relaxed">
+            Preencha os dados básicos e as credenciais de acesso para a nova unidade.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6 pt-6">
           {error && (
-            <div className="bg-red-900/30 border border-red-600 text-red-400 px-4 py-3 rounded">
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl text-sm animate-in fade-in zoom-in duration-200 font-medium">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-slate-300">
-                Nome da Barbearia *
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Ex: Barbearia do João"
-                required
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              />
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-sm font-semibold text-white tracking-tight">
+                  Nome da Barbearia *
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  placeholder="Ex: Barbearia Premium"
+                  required
+                  className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="slug" className="text-sm font-semibold text-white tracking-tight">
+                  Slug (URL Amigável) *
+                </Label>
+                <Input
+                  id="slug"
+                  value={formData.slug}
+                  onChange={(e) => handleChange("slug", e.target.value)}
+                  placeholder="ex-barbearia-premium"
+                  required
+                  className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="slug" className="text-slate-300">
-                Slug (URL) *
-              </Label>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => handleChange("slug", e.target.value)}
-                placeholder="barbearia-do-joao"
-                required
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              />
-              <p className="text-xs text-slate-500">
-                URL: barbeariagendamento.com.br/{formData.slug || "seu-slug"}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-slate-300">
-                Descrição
-              </Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => handleChange("description", e.target.value)}
-                placeholder="Descrição da barbearia"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact" className="text-slate-300">
+              <Label htmlFor="contact" className="text-sm font-semibold text-white tracking-tight">
                 Telefone de Contato
               </Label>
               <Input
@@ -185,70 +158,73 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
                 value={formData.contact}
                 onChange={(e) => handleChange("contact", e.target.value)}
                 placeholder="(11) 99999-9999"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
               />
             </div>
 
-            <div className="border-t border-slate-700 pt-4 mt-4">
-              <h3 className="text-lg font-semibold mb-4 text-white">Dados do Administrador</h3>
+            <div className="p-6 rounded-2xl bg-slate-800/20 border border-slate-700/30 space-y-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Credenciais Administrativas</h3>
+              </div>
 
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="adminEmail" className="text-slate-300">
-                    Email do Admin *
+                  <Label htmlFor="adminEmail" className="text-sm font-medium text-white/90">
+                    Email de Acesso *
                   </Label>
                   <Input
                     id="adminEmail"
                     type="email"
                     value={formData.adminEmail}
                     onChange={(e) => handleChange("adminEmail", e.target.value)}
-                    placeholder="admin@exemplo.com"
+                    placeholder="admin@unidade.com"
                     required
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                    className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="adminPassword" className="text-slate-300">
-                    Senha do Admin *
+                  <Label htmlFor="adminPassword" className="text-sm font-medium text-white/90">
+                    Senha Provisória *
                   </Label>
                   <Input
                     id="adminPassword"
                     type="password"
                     value={formData.adminPassword}
                     onChange={(e) => handleChange("adminPassword", e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mín. 6 caracteres"
                     required
                     minLength={6}
-                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                    className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-3 pt-6 border-t border-slate-800/50">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="border-slate-600 text-slate-300 hover:bg-slate-700"
+              className="bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:text-rose-300 transition-all rounded-xl px-8 h-11"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/15 rounded-xl px-10 h-11 border-t border-blue-400/20 transition-all active:scale-[0.98]"
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Criando...
+                  Processando...
                 </>
               ) : (
-                "Criar Barbearia"
+                "Criar Unidade"
               )}
             </Button>
           </DialogFooter>

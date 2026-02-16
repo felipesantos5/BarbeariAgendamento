@@ -258,77 +258,126 @@ router.delete("/subscriptions/:subscriptionId", async (req, res) => {
 // GET - Visão geral
 router.get("/overview", async (req, res) => {
   try {
-    // Busca todas as assinaturas ativas
-    const subscriptions = await BarbershopSubscription.find({ status: "active" })
-      .populate("barbershop", "name slug accountStatus createdAt")
-      .populate("basePlan", "name")
-      .lean();
+    const { month, year } = req.query;
     
-    // Calcula métricas
-    const totalMonthlyRevenue = subscriptions.reduce(
-      (sum, sub) => sum + sub.monthlyPrice,
-      0
-    );
+    // Data alvo: fim do mês selecionado
+    const targetDate = new Date();
+    if (month !== undefined && year !== undefined) {
+      targetDate.setFullYear(parseInt(year), parseInt(month), 1);
+      targetDate.setMonth(targetDate.getMonth() + 1);
+      targetDate.setDate(0);
+      targetDate.setHours(23, 59, 59, 999);
+    } else {
+      targetDate.setHours(23, 59, 59, 999);
+    }
+
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+
+    // Busca todas as assinaturas e despesas
+    const [subscriptions, expenses] = await Promise.all([
+      BarbershopSubscription.find().populate("barbershop", "name slug accountStatus createdAt").lean(),
+      Expense.find().lean()
+    ]);
     
-    const totalBarbershops = subscriptions.length;
+    // 1. Receita Bruta do Mês Selecionado
+    let periodRevenue = 0;
+    subscriptions.forEach((sub) => {
+      const startDate = new Date(sub.startDate);
+      // Consideramos que se a assinatura começou antes ou durante o mês, e não está cancelada
+      // Simplificação: se for ativa hoje ou se o histórico de pagamentos indicar atividade
+      if (startDate <= targetDate && sub.status !== "cancelled") {
+        periodRevenue += sub.monthlyPrice;
+      }
+    });
+
+    // 2. Faturamento Bruto Total (Até o targetDate)
+    let totalBilledUntil = 0;
+    subscriptions.forEach((sub) => {
+      const startDate = new Date(sub.startDate);
+      if (startDate <= targetDate) {
+        const monthsActive = getMonthsBetween(sub.startDate, targetDate);
+        totalBilledUntil += monthsActive * sub.monthlyPrice;
+      }
+    });
     
-    // Agrupa por plano
+    // 3. Despesas do Mês Selecionado
+    let periodExpenses = 0;
+    expenses.forEach((exp) => {
+      if (!exp.isActive) return;
+      
+      if (exp.type === "one-time") {
+        const expDate = new Date(exp.date);
+        if (expDate.getFullYear() === targetYear && expDate.getMonth() === targetMonth) {
+          periodExpenses += exp.amount;
+        }
+      } else {
+        // Mensal
+        const start = new Date(exp.startDate);
+        const checkDate = new Date(targetYear, targetMonth, 1);
+        if (checkDate >= start) {
+          if (!exp.endDate || checkDate <= new Date(exp.endDate)) {
+            periodExpenses += exp.amount;
+          }
+        }
+      }
+    });
+
+    // 4. Despesas Totais Acumuladas (Até o targetDate)
+    let totalExpensesUntil = 0;
+    expenses.forEach((exp) => {
+      if (!exp.isActive) return;
+
+      if (exp.type === "one-time") {
+        const expDate = new Date(exp.date);
+        if (expDate <= targetDate) {
+          totalExpensesUntil += exp.amount;
+        }
+      } else {
+        // Mensal acumulado
+        const start = new Date(exp.startDate);
+        if (start <= targetDate) {
+          const endLimit = exp.endDate ? new Date(exp.endDate) : targetDate;
+          const actualEnd = endLimit < targetDate ? endLimit : targetDate;
+          const monthsActive = getMonthsBetween(exp.startDate, actualEnd);
+          totalExpensesUntil += monthsActive * exp.amount;
+        }
+      }
+    });
+
+    // 5. Lucro Líquido Acumulado (Valor Líquido)
+    const totalNetValue = totalBilledUntil - totalExpensesUntil;
+
+    // 6. Receita Anual Projetada (Baseada no faturamento mensal atual)
+    const currentMonthlyRevenue = subscriptions
+      .filter(s => s.status === "active")
+      .reduce((sum, sub) => sum + sub.monthlyPrice, 0);
+    const projectedAnnualRevenue = currentMonthlyRevenue * 12;
+
+    const totalBarbershops = subscriptions.filter(s => s.status === "active").length;
+    
+    // Agrupa por plano (apenas ativos)
     const revenueByPlan = {};
     subscriptions.forEach((sub) => {
+      if (sub.status !== "active") return;
       const planName = sub.planName;
       if (!revenueByPlan[planName]) {
-        revenueByPlan[planName] = {
-          count: 0,
-          revenue: 0,
-        };
+        revenueByPlan[planName] = { count: 0, revenue: 0 };
       }
       revenueByPlan[planName].count += 1;
       revenueByPlan[planName].revenue += sub.monthlyPrice;
     });
-    
-    // Calcula receita anual projetada
-    const projectedAnnualRevenue = totalMonthlyRevenue * 12;
-    
-    // Calcula total faturado (desde o início de cada assinatura)
-    const today = new Date();
-    let totalBilled = 0;
-    
-    subscriptions.forEach((sub) => {
-      const monthsActive = getMonthsBetween(sub.startDate, today);
-      totalBilled += monthsActive * sub.monthlyPrice;
-    });
 
-    // Calcula despesas do mês atual
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-    const expenses = await Expense.find({ isActive: true });
-    
-    const totalMonthlyExpenses = expenses.reduce((sum, exp) => {
-      if (exp.isActiveInMonth(currentYear, currentMonth)) {
-        return sum + exp.amount;
-      }
-      return sum;
-    }, 0);
-
-    const monthlyProfit = totalMonthlyRevenue - totalMonthlyExpenses;
-    
-    // Próximas cobranças (próximos 30 dias)
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(today.getDate() + 30);
-    
-    const upcomingBillings = subscriptions.filter(
-      (sub) => sub.nextBillingDate >= today && sub.nextBillingDate <= thirtyDaysFromNow
-    ).length;
-    
     res.json({
-      totalMonthlyRevenue,
+      totalMonthlyRevenue: periodRevenue,
       projectedAnnualRevenue,
-      totalBilled,
+      totalBilled: totalBilledUntil,     // FATURADO (Gross Until Target)
+      totalNetValue: totalNetValue,      // VALOR LÍQUIDO (Gross Until Target - Expenses Until Target)
       totalBarbershops,
-      totalMonthlyExpenses,
-      monthlyProfit,
-      upcomingBillings,
+      totalMonthlyExpenses: periodExpenses,
+      monthlyProfit: periodRevenue - periodExpenses,
       revenueByPlan,
+      filterPeriod: { month: targetMonth, year: targetYear },
       subscriptions: subscriptions.map((sub) => ({
         _id: sub._id,
         barbershop: {
@@ -342,8 +391,7 @@ router.get("/overview", async (req, res) => {
         startDate: sub.startDate,
         nextBillingDate: sub.nextBillingDate,
         status: sub.status,
-        paymentCount: getMonthsBetween(sub.startDate, today),
-        paymentHistory: sub.paymentHistory,
+        paymentCount: getMonthsBetween(sub.startDate, targetDate),
       })),
     });
   } catch (error) {
@@ -351,6 +399,7 @@ router.get("/overview", async (req, res) => {
     res.status(500).json({ error: "Erro ao buscar dados de faturamento." });
   }
 });
+
 
 // ============= DESPESAS =============
 
@@ -440,21 +489,30 @@ router.delete("/expenses/:expenseId", async (req, res) => {
 // GET - Overview de despesas
 router.get("/expenses/overview", async (req, res) => {
   try {
+    const { month, year } = req.query;
+    
+    const targetDate = new Date();
+    if (month !== undefined && year !== undefined) {
+      targetDate.setFullYear(parseInt(year), parseInt(month), 1);
+    } else {
+      // Default to next month for projected views if not specified? 
+      // Actually, user wants to see "selected month". Let's default to CURRENT month.
+      targetDate.setDate(1); 
+    }
+
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth();
+
     const expenses = await Expense.find({ isActive: true });
     
-    // Calcula despesas do próximo mês
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    const year = nextMonth.getFullYear();
-    const month = nextMonth.getMonth();
-    
-    let nextMonthExpenses = 0;
+    // Calcula despesas do período selecionado
+    let periodExpenses = 0;
     let monthlyExpenses = 0;
     let oneTimeExpenses = 0;
     
     expenses.forEach((expense) => {
-      if (expense.isActiveInMonth(year, month)) {
-        nextMonthExpenses += expense.amount;
+      if (expense.isActiveInMonth(targetYear, targetMonth)) {
+        periodExpenses += expense.amount;
       }
       
       if (expense.type === "monthly") {
@@ -464,20 +522,22 @@ router.get("/expenses/overview", async (req, res) => {
       }
     });
     
-    // Busca receita do próximo mês (assinaturas ativas)
+    // Busca receita do período selecionado (assinaturas ativas)
+    // Para simplificar, usamos assinaturas ativas atuais
     const subscriptions = await BarbershopSubscription.find({ status: "active" });
-    const nextMonthRevenue = subscriptions.reduce((sum, sub) => sum + sub.monthlyPrice, 0);
+    const periodRevenue = subscriptions.reduce((sum, sub) => sum + sub.monthlyPrice, 0);
     
-    // Calcula lucro projetado
-    const projectedProfit = nextMonthRevenue - nextMonthExpenses;
+    // Calcula lucro do período
+    const periodProfit = periodRevenue - periodExpenses;
     
     res.json({
-      nextMonthRevenue,
-      nextMonthExpenses,
-      projectedProfit,
+      nextMonthRevenue: periodRevenue,   // Chamamos de nextMonth mas agora é periodRevenue
+      nextMonthExpenses: periodExpenses, // periodExpenses
+      projectedProfit: periodProfit,     // periodProfit
       monthlyExpenses,
       oneTimeExpenses,
       totalExpenses: expenses.length,
+      filterPeriod: { month: targetMonth, year: targetYear },
       expenses: expenses.map((exp) => ({
         _id: exp._id,
         name: exp.name,
@@ -490,6 +550,7 @@ router.get("/expenses/overview", async (req, res) => {
         endDate: exp.endDate,
         isActive: exp.isActive,
         notes: exp.notes,
+        isActiveInPeriod: exp.isActiveInMonth(targetYear, targetMonth)
       })),
     });
   } catch (error) {

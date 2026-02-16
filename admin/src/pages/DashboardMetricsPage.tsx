@@ -370,7 +370,7 @@ export default function DashboardMetricsPage() {
                 setFilterMode("month");
               }}
             >
-              <SelectTrigger className="w-full sm:w-[120px]">
+              <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="Ano" />
               </SelectTrigger>
               <SelectContent>
@@ -587,6 +587,7 @@ export default function DashboardMetricsPage() {
                               }}
                             />
                             <Legend
+                              wrapperStyle={{ transform: "translateY(8px)" }}
                               formatter={(value) => (
                                 <span className="text-xs text-foreground">{value}</span>
                               )}
@@ -690,17 +691,19 @@ export default function DashboardMetricsPage() {
                       <ChartContainer config={professionalChartConfig} className="h-[300px] w-full">
                         <BarChart
                           accessibilityLayer
-                          data={data.barberPerformance.map((barber) => {
-                            const totalRevenue = barber.totalServiceRevenue + barber.totalPlanRevenue + barber.totalProductRevenue;
-                            const commission = barber.totalCommission;
-                            const net = totalRevenue - commission;
-                            return {
-                              name: barber.name,
-                              total: totalRevenue,
-                              comissao: commission,
-                              liquido: net > 0 ? net : 0,
-                            };
-                          })}
+                          data={[...data.barberPerformance]
+                            .sort((a, b) => b.completedBookings - a.completedBookings)
+                            .map((barber) => {
+                              const totalRevenue = barber.totalServiceRevenue + barber.totalPlanRevenue + barber.totalProductRevenue;
+                              const commission = barber.totalCommission;
+                              const net = totalRevenue - commission;
+                              return {
+                                name: barber.name,
+                                total: totalRevenue,
+                                comissao: commission,
+                                liquido: net > 0 ? net : 0,
+                              };
+                            })}
                         >
                           <CartesianGrid vertical={false} />
                           <XAxis
@@ -951,21 +954,23 @@ export default function DashboardMetricsPage() {
               </TableHeader>
               <TableBody>
                 {data.barberPerformance.length > 0 ? (
-                  data.barberPerformance.map((barber) => (
-                    <TableRow key={barber._id}>
-                      <TableCell className="font-medium">
-                        {barber.name}
-                        <span className="ml-2 text-xs text-muted-foreground">({barber.commissionRate}%)</span>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalServiceRevenue)}</TableCell>
-                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalPlanRevenue)}</TableCell>
-                      <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalProductRevenue)}</TableCell>
-                      <TableCell className="text-right font-bold text-purple-700">{PriceFormater(barber.totalCommission)}</TableCell>
-                      <TableCell className="text-center">{barber.completedBookings}</TableCell>
-                      <TableCell className="text-center">{barber.totalPlansSold}</TableCell>
-                      <TableCell className="text-center">{barber.totalProductsSold}</TableCell>
-                    </TableRow>
-                  ))
+                  [...data.barberPerformance]
+                    .sort((a, b) => b.completedBookings - a.completedBookings)
+                    .map((barber) => (
+                      <TableRow key={barber._id}>
+                        <TableCell className="font-medium">
+                          {barber.name}
+                          <span className="ml-2 text-xs text-muted-foreground">({barber.commissionRate}%)</span>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalServiceRevenue)}</TableCell>
+                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalPlanRevenue)}</TableCell>
+                        <TableCell className="text-right font-semibold text-green-700">{PriceFormater(barber.totalProductRevenue)}</TableCell>
+                        <TableCell className="text-right font-bold text-purple-700">{PriceFormater(barber.totalCommission)}</TableCell>
+                        <TableCell className="text-center font-bold">{barber.completedBookings}</TableCell>
+                        <TableCell className="text-center">{barber.totalPlansSold}</TableCell>
+                        <TableCell className="text-center">{barber.totalProductsSold}</TableCell>
+                      </TableRow>
+                    ))
                 ) : (
                   <TableRow>
                     <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">

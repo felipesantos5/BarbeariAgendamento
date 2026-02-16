@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import superAdminApiClient from "@/services/superAdminApi";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
-import { API_BASE_URL } from "@/config/BackendUrl";
+
 
 interface Expense {
   _id: string;
@@ -40,7 +41,6 @@ interface ManageExpenseModalProps {
   onOpenChange: (open: boolean) => void;
   expense: Expense | null;
   onSuccess: () => void;
-  token: string;
 }
 
 export function ManageExpenseModal({
@@ -48,7 +48,6 @@ export function ManageExpenseModal({
   onOpenChange,
   expense,
   onSuccess,
-  token,
 }: ManageExpenseModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,30 +119,19 @@ export function ManageExpenseModal({
       }
 
       const url = expense
-        ? `${API_BASE_URL}/api/superadmin/billing/expenses/${expense._id}`
-        : `${API_BASE_URL}/api/superadmin/billing/expenses`;
+        ? `/api/superadmin/billing/expenses/${expense._id}`
+        : `/api/superadmin/billing/expenses`;
 
-      const method = expense ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Erro ao salvar despesa");
+      if (expense) {
+        await superAdminApiClient.put(url, body);
+      } else {
+        await superAdminApiClient.post(url, body);
       }
 
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || "Erro ao salvar despesa");
+      setError(err.response?.data?.error || err.message || "Erro ao salvar despesa");
     } finally {
       setIsLoading(false);
     }

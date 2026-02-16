@@ -23,10 +23,27 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Armazena referencias de todos os cron jobs para poder parar no shutdown
 const cronTasks = [];
 
-const sendDailyReminders = async (triggerHour) => {
-  console.log(`[${new Date().toLocaleTimeString()}] Iniciando envio de lembretes para triggerHour: ${triggerHour}`);
+const sendDailyReminders = async (triggerTime) => {
   const now = new Date();
   const nowInBrazil = toZonedTime(now, BRAZIL_TZ);
+
+  // 1. Busca quais barbearias possuem disparos configurados para este minuto exato
+  const shopsToNotify = await Barbershop.find({
+    "whatsappConfig.enabled": true,
+    $or: [
+      { "whatsappConfig.morningReminderTime": triggerTime },
+      { "whatsappConfig.afternoonReminderTime": triggerTime }
+    ]
+  }).select("_id").lean();
+
+  if (shopsToNotify.length === 0) {
+    // Silencioso se não houver nada para este minuto
+    return;
+  }
+
+  console.log(`[${new Date().toLocaleTimeString()}] Iniciando envio de lembretes para ${shopsToNotify.length} barbearias no trigger: ${triggerTime}`);
+
+  const shopIds = shopsToNotify.map(s => s._id);
 
   const startOfDayBrazil = startOfDay(nowInBrazil);
   const endOfDayBrazil = endOfDay(nowInBrazil);
@@ -36,6 +53,7 @@ const sendDailyReminders = async (triggerHour) => {
 
   try {
     const bookings = await Booking.find({
+      barbershop: { $in: shopIds },
       time: {
         $gte: start,
         $lt: end,
@@ -48,17 +66,17 @@ const sendDailyReminders = async (triggerHour) => {
       .lean(); // Read-only query optimization
 
     if (bookings.length === 0) {
-      console.log(`-> Nenhum agendamento encontrado para hoje.`);
+      console.log(`-> Nenhum agendamento encontrado para as barbearias deste trigger.`);
       await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
-        `📅 Lembretes Diários - ${triggerHour}h`,
+        `📅 Lembretes Diários - ${triggerTime}h`,
         16776960, // Yellow
-        [{ name: "Status", value: "Nenhum agendamento encontrado para hoje.", inline: false }]
+        [{ name: "Status", value: "Nenhum agendamento encontrado para este horário.", inline: false }]
       ));
       return;
     }
 
     await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
-      `🔔 Iniciando Envio de Lembretes - ${triggerHour}h`,
+      `🔔 Iniciando Envio de Lembretes - ${triggerTime}h`,
       3447003, // Blue
       [{ name: "Agendamentos Encontrados", value: bookings.length.toString(), inline: true }]
     ));
@@ -76,12 +94,27 @@ const sendDailyReminders = async (triggerHour) => {
       // Extrai a hora do agendamento no fuso do Brasil
       const appointmentHourInBrazil = getHours(appointmentDateInBrazil);
 
-      // Se o trigger e 8h, so envia se o agendamento for ANTES das 13h
-      if (triggerHour === 8 && appointmentHourInBrazil >= 13) {
+      const barbershop = booking.barbershop;
+      const morningTime = barbershop.whatsappConfig?.morningReminderTime || "08:00";
+      const afternoonTime = barbershop.whatsappConfig?.afternoonReminderTime || "13:00";
+
+      const isMorningTrigger = morningTime === triggerTime;
+      const isAfternoonTrigger = afternoonTime === triggerTime;
+
+      // Se este horário não é o de disparo de manhã nem o de tarde desta barbearia, pula
+      if (!isMorningTrigger && !isAfternoonTrigger) {
         continue;
       }
-      // Se o trigger e 13h, so envia se o agendamento for a partir das 13h
-      if (triggerHour === 13 && appointmentHourInBrazil < 13) {
+
+      // Se for o horário da manhã da barbearia, só envia pros agendamentos da manhã (< 13h)
+      // A menos que o horário da tarde seja o mesmo (o que mandaria tudo)
+      if (isMorningTrigger && appointmentHourInBrazil >= 13 && !isAfternoonTrigger) {
+        continue;
+      }
+      
+      // Se for o horário da tarde da barbearia, só envia pros agendamentos da tarde (>= 13h)
+      // A menos que o horário da manhã seja o mesmo
+      if (isAfternoonTrigger && appointmentHourInBrazil < 13 && !isMorningTrigger) {
         continue;
       }
 
@@ -92,8 +125,9 @@ const sendDailyReminders = async (triggerHour) => {
         ? `${booking.barbershop.address.rua}, ${booking.barbershop.address.numero} - ${booking.barbershop.address.bairro}`
         : "";
 
-      const greeting = triggerHour === 8 ? "Bom dia" : "Ola";
-      const message = `${greeting}, ${booking.customer.name}! Lembrete do seu agendamento hoje na ${booking.barbershop.name} as ${appointmentTimeFormatted} com ${booking.barber.name}\n\nPara mais informacoes, entre em contato com a barbearia: ${booking.barbershop.contact}\nEndereco: ${barberShopAdress}`;
+      const triggerHourNum = parseInt(triggerTime.split(":")[0]);
+      const greeting = triggerHourNum < 12 ? "Bom dia" : "Olá";
+      const message = `${greeting}, ${booking.customer.name}! Lembrete do seu agendamento hoje na ${booking.barbershop.name} às ${appointmentTimeFormatted} com ${booking.barber.name}\n\nEndereço: ${barberShopAdress}`;
 
       const result = await sendWhatsAppMessage(booking.barbershop._id.toString(), customerPhone, message);
 
@@ -121,7 +155,7 @@ const sendDailyReminders = async (triggerHour) => {
     console.log(`[CRON] Lembretes enviados: ${sentCount}/${bookings.length}`);
 
     await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
-      `✅ Lembretes Finalizados - ${triggerHour}h`,
+      `✅ Lembretes Finalizados - ${triggerTime}h`,
       5763719, // Green
       [
         { name: "Total", value: bookings.length.toString(), inline: true },
@@ -130,9 +164,9 @@ const sendDailyReminders = async (triggerHour) => {
       ]
     ));
   } catch (error) {
-    console.error(`[CRON] Erro ao enviar lembretes de agendamento (trigger: ${triggerHour}):`, error.message);
+    console.error(`[CRON] Erro ao enviar lembretes de agendamento (trigger: ${triggerTime}):`, error.message);
     await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
-      `❌ Erro no Processo de Lembretes - ${triggerHour}h`,
+      `❌ Erro no Processo de Lembretes - ${triggerTime}h`,
       15548997, // Red
       [{ name: "Erro", value: error.message, inline: false }]
     ));
@@ -247,12 +281,15 @@ cronTasks.push(
 
 cronTasks.push(
   cron.schedule(
-    "0 8 * * *",
+    "* * * * *",
     () => {
       if (ENABLE_AUTOMATIC_MESSAGES) {
-        sendDailyReminders(8);
+        const now = new Date();
+        const nowInBrazil = toZonedTime(now, BRAZIL_TZ);
+        const currentTime = format(nowInBrazil, "HH:mm");
+        sendDailyReminders(currentTime);
       } else {
-        console.log("[CRON] Envio de lembretes (8h) ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
+        console.log("[CRON] Envio de lembretes ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
       }
     },
     {
@@ -279,22 +316,7 @@ cronTasks.push(
   )
 );
 
-cronTasks.push(
-  cron.schedule(
-    "0 13 * * *",
-    () => {
-      if (ENABLE_AUTOMATIC_MESSAGES) {
-        sendDailyReminders(13);
-      } else {
-        console.log("[CRON] Envio de lembretes (13h) ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
-      }
-    },
-    {
-      scheduled: true,
-      timezone: "America/Sao_Paulo",
-    }
-  )
-);
+// O cron job de 13h foi removido pois agora o processo é de hora em hora.
 
 cronTasks.push(
   cron.schedule(

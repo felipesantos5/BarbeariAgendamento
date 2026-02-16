@@ -245,8 +245,9 @@ router.post("/connect", protectAdmin, async (req, res) => {
     // Cria nova instância (já retorna o QR code)
     const { instanceName, qrcode, pairingCode } = await createInstance(id);
 
-    // Atualiza o banco de dados
+    // Atualiza o banco de dados preservando configurações existentes
     barbershop.whatsappConfig = {
+      ...barbershop.whatsappConfig,
       enabled: true,
       instanceName,
       connectionStatus: "connecting",
@@ -321,6 +322,8 @@ router.get("/status", protectAdmin, async (req, res) => {
       instanceName: barbershop.whatsappConfig.instanceName,
       connectedAt: barbershop.whatsappConfig.connectedAt,
       lastCheckedAt: barbershop.whatsappConfig.lastCheckedAt,
+      morningReminderTime: barbershop.whatsappConfig.morningReminderTime || "08:00",
+      afternoonReminderTime: barbershop.whatsappConfig.afternoonReminderTime || "13:00",
     });
   } catch (error) {
     console.error("[WhatsApp] Erro ao verificar status:", error);
@@ -423,6 +426,48 @@ router.delete("/disconnect", protectAdmin, async (req, res) => {
     console.error("[WhatsApp] Erro ao desconectar:", error);
     res.status(500).json({
       error: "Erro ao desconectar WhatsApp",
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/barbershops/:barbershopId/whatsapp/settings
+ * Atualiza as configurações de lembrete do WhatsApp
+ */
+router.put("/settings", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+    const { morningReminderTime, afternoonReminderTime } = req.body;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada" });
+    }
+
+    if (!barbershop.whatsappConfig) {
+      barbershop.whatsappConfig = {};
+    }
+
+    if (morningReminderTime) {
+      barbershop.whatsappConfig.morningReminderTime = morningReminderTime;
+    }
+    
+    if (afternoonReminderTime) {
+      barbershop.whatsappConfig.afternoonReminderTime = afternoonReminderTime;
+    }
+
+    await barbershop.save();
+
+    res.json({
+      message: "Configurações de WhatsApp atualizadas com sucesso",
+      morningReminderTime: barbershop.whatsappConfig.morningReminderTime,
+      afternoonReminderTime: barbershop.whatsappConfig.afternoonReminderTime,
+    });
+  } catch (error) {
+    console.error("[WhatsApp] Erro ao atualizar configurações:", error);
+    res.status(500).json({
+      error: "Erro ao atualizar configurações",
       message: error.message,
     });
   }

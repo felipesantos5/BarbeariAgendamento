@@ -94,10 +94,19 @@ const BarbershopSchema = new mongoose.Schema(
       },
       connectedNumber: { type: String, default: null },
       connectedAt: { type: Date, default: null },
-      lastCheckedAt: { type: Date, default: null }
+      lastCheckedAt: { type: Date, default: null },
+      morningReminderTime: { type: String, default: "08:00" },
+      afternoonReminderTime: { type: String, default: "13:00" }
+    },
+    isArchived: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
 );
+
+BarbershopSchema.index({ "whatsappConfig.morningReminderTime": 1 });
+BarbershopSchema.index({ "whatsappConfig.afternoonReminderTime": 1 });
 
 export default mongoose.model("Barbershop", BarbershopSchema);

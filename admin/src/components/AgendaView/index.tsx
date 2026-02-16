@@ -26,6 +26,18 @@ const CustomEvent = ({ event }: EventProps<AgendaEvent>) => {
     );
   }
 
+  if (event.resource?.type === "break") {
+    return (
+      <div className="flex flex-col items-center justify-center h-full w-full p-1 text-center overflow-hidden text-white drop-shadow-sm">
+        <span className="text-[10px] font-black uppercase tracking-wider leading-none mb-1">PAUSA</span>
+        <span className="text-[11px] font-bold truncate w-full leading-none mb-1">{event.resource.barberName}</span>
+        <span className="text-[10px] font-medium opacity-90 leading-none">
+          {format(event.start, "HH:mm")} - {format(event.end, "HH:mm")}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className={containerClasses + (isCanceled ? " text-white/50" : " text-white")}>
       <div className={isCanceled ? "opacity-70" : ""}>
@@ -149,16 +161,18 @@ export function AgendaView({ events, onSelectEvent, onSelectSlot, currentDate, o
 
           // Estilização específica para breaks
           if (event.resource?.type === "break") {
+            const baseColor = event.resource?.color || "#333333";
             return {
               style: {
-                backgroundColor: "#fef3c7", // Fundo amarelo claro
-                backgroundImage: "repeating-linear-gradient(45deg, #f59e0b, #f59e0b 2px, #fbbf24 2px, #fbbf24 8px)",
-                color: "#92400e", // Texto marrom escuro
-                border: "1px solid #f59e0b",
+                backgroundColor: baseColor,
+                backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 2px, transparent 2px, transparent 10px)",
+                color: "white",
+                border: "1px solid rgba(0,0,0,0.3)",
                 borderRadius: "4px",
-                opacity: event.resource?.isPast ? 0.6 : 0.9,
-                fontWeight: "500",
+                opacity: event.resource?.isPast ? 0.6 : 1,
+                fontWeight: "600",
                 pointerEvents: "none",
+                filter: "brightness(0.7)", // Torna a cor base do barbeiro mais escura
               },
             };
           }

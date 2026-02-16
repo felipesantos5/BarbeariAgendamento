@@ -22,7 +22,7 @@ import {
   AlertTriangle,
   CreditCard,
   Receipt,
-  MessageCircle,
+  Bell,
 } from "lucide-react"; // Ícones de exemplo
 import { useAuth } from "@/contexts/AuthContext";
 import apiClient from "@/services/api";
@@ -259,6 +259,12 @@ export function AdminLayout() {
           icon: <Package className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
+        {
+          to: "custos-operacionais",
+          label: "Custos Operacionais",
+          icon: <Receipt className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
+        },
       ],
     },
     {
@@ -273,8 +279,8 @@ export function AdminLayout() {
         },
         {
           to: "whatsapp",
-          label: "WhatsApp",
-          icon: <MessageCircle className="mr-2 h-4 w-4" />,
+          label: "Notificações",
+          icon: <Bell className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
         {
@@ -283,13 +289,6 @@ export function AdminLayout() {
           icon: <CreditCard className="mr-2 h-4 w-4" />,
           roles: ["admin"],
         },
-        {
-          to: "custos-operacionais",
-          label: "Custos Operacionais",
-          icon: <Receipt className="mr-2 h-4 w-4" />,
-          roles: ["admin"],
-        },
-
         {
           to: "recorrencia",
           label: "Recorrência",

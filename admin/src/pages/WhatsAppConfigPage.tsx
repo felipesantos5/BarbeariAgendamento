@@ -17,8 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer } from "lucide-react";
+import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer, Save } from "lucide-react";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PhoneFormat } from "@/helper/phoneFormater";
 
 interface WhatsAppStatus {
   status: "disconnected" | "connecting" | "connected";
@@ -27,29 +29,11 @@ interface WhatsAppStatus {
   instanceName: string | null;
   connectedAt?: string;
   lastCheckedAt?: string;
+  morningReminderTime?: string;
+  afternoonReminderTime?: string;
 }
 
 const QR_CODE_EXPIRY_TIME = 45; // QR code expira em ~45 segundos
-
-const formatPhoneNumber = (phone: string) => {
-  if (!phone) return "";
-  // Remove tudo que não for dígito
-  let cleaned = phone.replace(/\D/g, "");
-
-  // Se começar com 55, remove para formatar o padrão nacional
-  if (cleaned.startsWith("55") && cleaned.length > 10) {
-    cleaned = cleaned.substring(2);
-  }
-
-  // Aplica a máscara (XX) XXXXX-XXXX ou (XX) XXXX-XXXX
-  if (cleaned.length === 11) {
-    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 7)}-${cleaned.substring(7)}`;
-  } else if (cleaned.length === 10) {
-    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 6)}-${cleaned.substring(6)}`;
-  }
-
-  return phone; // Fallback caso não bata com os tamanhos acima
-};
 
 export const WhatsAppConfigPage = () => {
   const { barbershopId } = useOutletContext<AdminOutletContext>();
@@ -62,6 +46,9 @@ export const WhatsAppConfigPage = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [qrCodeTimer, setQrCodeTimer] = useState<number>(QR_CODE_EXPIRY_TIME);
+  const [morningTime, setMorningTime] = useState("08:00");
+  const [afternoonTime, setAfternoonTime] = useState("13:00");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
   const qrTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -100,7 +87,10 @@ export const WhatsAppConfigPage = () => {
   const fetchWhatsAppStatus = async () => {
     try {
       const response = await apiClient.get(`/api/barbershops/${barbershopId}/whatsapp/status`);
-      setWhatsappStatus(response.data);
+      const data = response.data;
+      setWhatsappStatus(data);
+      if (data.morningReminderTime) setMorningTime(data.morningReminderTime);
+      if (data.afternoonReminderTime) setAfternoonTime(data.afternoonReminderTime);
     } catch (error: any) {
       console.error("Erro ao buscar status do WhatsApp:", error);
       toast.error(error.response?.data?.error || "Erro ao buscar status");
@@ -256,6 +246,37 @@ export const WhatsAppConfigPage = () => {
     setQrCodeTimer(QR_CODE_EXPIRY_TIME);
   };
 
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const response = await apiClient.put(`/api/barbershops/${barbershopId}/whatsapp/settings`, {
+        morningReminderTime: morningTime,
+        afternoonReminderTime: afternoonTime,
+      });
+
+      // Atualiza o estado local do status para refletir os novos horários
+      setWhatsappStatus((prev) => prev ? ({
+        ...prev,
+        morningReminderTime: response.data.morningReminderTime,
+        afternoonReminderTime: response.data.afternoonReminderTime,
+      }) : null);
+
+      toast.success("Configurações salvas com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações:", error);
+      toast.error(error.response?.data?.error || "Erro ao salvar configurações");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const timeOptions = [];
+  for (let i = 0; i < 24; i++) {
+    const hour = i.toString().padStart(2, "0");
+    timeOptions.push(`${hour}:00`);
+    timeOptions.push(`${hour}:30`);
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-10">
@@ -310,7 +331,7 @@ export const WhatsAppConfigPage = () => {
             {whatsappStatus?.status === "connected" && whatsappStatus.connectedNumber && (
               <div className="text-right space-y-1">
                 <Label className="text-sm text-muted-foreground">Número Conectado</Label>
-                <p className="font-mono font-semibold text-lg">{formatPhoneNumber(whatsappStatus.connectedNumber)}</p>
+                <p className="font-mono font-semibold text-lg">{PhoneFormat(whatsappStatus.connectedNumber)}</p>
               </div>
             )}
           </div>
@@ -363,6 +384,74 @@ export const WhatsAppConfigPage = () => {
                 </Button>
               </>
             )}
+          </div>
+
+          <hr className="my-6" />
+
+          {/* Configurações Customizadas */}
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Horários de Lembrete</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Defina o horário em que os lembretes automáticos serão enviados para seus clientes.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div className="space-y-2">
+                <Label htmlFor="morningTime">Lembrete Período Manhã</Label>
+                <div className="flex flex-col gap-2">
+                  <Select value={morningTime} onValueChange={setMorningTime}>
+                    <SelectTrigger id="morningTime" className="w-full">
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.map((time) => (
+                        <SelectItem key={`morning-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">
+                    Enviado para agendamentos até as 13:00
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="afternoonTime">Lembrete Período Tarde</Label>
+                <div className="flex flex-col gap-2">
+                  <Select value={afternoonTime} onValueChange={setAfternoonTime}>
+                    <SelectTrigger id="afternoonTime" className="w-full">
+                      <SelectValue placeholder="Selecione o horário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {timeOptions.map((time) => (
+                        <SelectItem key={`afternoon-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">
+                    Enviado para agendamentos após as 13:00
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
+                {isSavingSettings ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Salvar Configurações de Horário
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

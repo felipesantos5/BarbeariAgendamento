@@ -197,7 +197,7 @@ export const CheckoutConfigPage = () => {
               </div>
 
               {formData.paymentsEnabled && (
-                <div className="flex items-center justify-between rounded-xl border p-4 bg-background shadow-sm border-l-4 border-l-primary animate-in fade-in slide-in-from-left-4">
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-background shadow-sm border-l-4 border-l-primary">
                   <div className="space-y-0.5">
                     <Label htmlFor="requireOnlinePayment" className="text-base font-bold">
                       Pagamento Obrigatório
@@ -219,7 +219,7 @@ export const CheckoutConfigPage = () => {
           {formData.paymentsEnabled && (
             <>
               {/* SEÇÃO 2: CREDENCIAIS */}
-              <section className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+              <section className="space-y-4">
                 <div className="flex items-center gap-2 text-primary font-semibold">
                   <ShieldCheck className="h-5 w-5" />
                   <h3>Conexão com Mercado Pago</h3>
@@ -285,7 +285,7 @@ export const CheckoutConfigPage = () => {
               </section>
 
               {/* SEÇÃO 3: SEGURANÇA E WEBHOOK */}
-              <section className="space-y-4 animate-in fade-in zoom-in-95 duration-500">
+              <section className="space-y-4">
                 <div className="flex items-center gap-2 text-primary font-semibold">
                   <Webhook className="h-5 w-5" />
                   <h3>Segurança e Sincronização</h3>

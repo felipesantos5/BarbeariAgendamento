@@ -243,12 +243,11 @@ router.get("/", async (req, res) => {
         name: barber.name,
         image: barber.image,
         availability: barber.availability,
-        break: barber.break
+        break: barber.break,
+        commission: barber.commission,
+        email: barber.loginInfo?.email
       };
       
-      // Se você quiser que o admin veja mais, precisaria de uma lógica de auth aqui.
-      // Por simplicidade e segurança total da rota pública, removemos sempre comissão e email.
-      // Se o admin precisar desses dados, ele deve usar uma rota específica autenticada.
       return baseInfo;
     });
 
