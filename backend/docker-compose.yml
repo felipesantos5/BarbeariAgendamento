@@ -95,7 +95,7 @@ services:
       - DATABASE_SAVE_MESSAGE_DELETE=true
 
   postgresql-evo:
-    image: postgres:16-alpine
+    image: postgres:14-alpine
     logging: *logging-config
     container_name: evolution_postgres
     restart: unless-stopped
