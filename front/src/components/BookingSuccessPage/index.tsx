@@ -173,7 +173,7 @@ export function BookingSuccessPage() {
             Você também deve receber uma confirmação por WhatsApp, caso configurado pela barbearia.
           </p> */}
         </CardContent>
-        <CardFooter className="p-6 bg-slate-50 border-t flex flex-col gap-3">
+        <CardFooter className="p-6 bg-slate-50 border-t flex flex-col gap-3 pb-0">
           {/* BOTÃO DE PAGAMENTO CONDICIONAL */}
           {paymentsEnabled && newBookingId && (
             <Button onClick={handlePayNow} disabled={isCreatingPayment} className="w-full bg-green-600 hover:bg-green-700 duration-300 text-white">
