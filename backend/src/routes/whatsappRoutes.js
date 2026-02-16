@@ -291,9 +291,11 @@ router.get("/status", protectAdmin, async (req, res) => {
     if (!barbershop.whatsappConfig?.instanceName) {
       return res.json({
         status: "disconnected",
-        enabled: false,
+        enabled: barbershop.whatsappConfig?.enabled || false,
         connectedNumber: null,
         instanceName: null,
+        morningReminderTime: barbershop.whatsappConfig?.morningReminderTime || "08:00",
+        afternoonReminderTime: barbershop.whatsappConfig?.afternoonReminderTime || "13:00",
       });
     }
 
@@ -407,15 +409,14 @@ router.delete("/disconnect", protectAdmin, async (req, res) => {
       // Silencioso
     }
 
-    // Limpa os dados no banco
-    barbershop.whatsappConfig = {
-      enabled: false,
-      instanceName: null,
-      connectionStatus: "disconnected",
-      connectedNumber: null,
-      connectedAt: null,
-      lastCheckedAt: new Date(),
-    };
+    // Limpa os dados de conexão no banco, mas PRESERVA as configurações de horário
+    barbershop.whatsappConfig.enabled = false;
+    barbershop.whatsappConfig.instanceName = null;
+    barbershop.whatsappConfig.connectionStatus = "disconnected";
+    barbershop.whatsappConfig.connectedNumber = null;
+    barbershop.whatsappConfig.connectedAt = null;
+    barbershop.whatsappConfig.lastCheckedAt = new Date();
+    // morningReminderTime e afternoonReminderTime são preservados automaticamente pois não estamos sobrescrevendo o objeto todo
 
     await barbershop.save();
 
@@ -450,11 +451,11 @@ router.put("/settings", protectAdmin, async (req, res) => {
     }
 
     if (morningReminderTime) {
-      barbershop.whatsappConfig.morningReminderTime = morningReminderTime;
+      barbershop.set("whatsappConfig.morningReminderTime", morningReminderTime);
     }
     
     if (afternoonReminderTime) {
-      barbershop.whatsappConfig.afternoonReminderTime = afternoonReminderTime;
+      barbershop.set("whatsappConfig.afternoonReminderTime", afternoonReminderTime);
     }
 
     await barbershop.save();
