@@ -281,15 +281,13 @@ cronTasks.push(
 
 cronTasks.push(
   cron.schedule(
-    "* * * * *",
+    "0,30 * * * *",
     () => {
       if (ENABLE_AUTOMATIC_MESSAGES) {
         const now = new Date();
         const nowInBrazil = toZonedTime(now, BRAZIL_TZ);
         const currentTime = format(nowInBrazil, "HH:mm");
         sendDailyReminders(currentTime);
-      } else {
-        console.log("[CRON] Envio de lembretes ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
       }
     },
     {
@@ -305,8 +303,6 @@ cronTasks.push(
     () => {
       if (ENABLE_AUTOMATIC_MESSAGES) {
         sendAutomatedReturnReminders();
-      } else {
-        console.log("[CRON] Envio de lembretes de retorno ignorado (ENABLE_AUTOMATIC_MESSAGES=false)");
       }
     },
     {
@@ -315,6 +311,8 @@ cronTasks.push(
     }
   )
 );
+
+console.log(`[CRON] Serviço de agendamentos carregado. Mensagens automáticas: ${ENABLE_AUTOMATIC_MESSAGES ? 'ATIVADAS' : 'DESATIVADAS'}`);
 
 // O cron job de 13h foi removido pois agora o processo é de hora em hora.
 
