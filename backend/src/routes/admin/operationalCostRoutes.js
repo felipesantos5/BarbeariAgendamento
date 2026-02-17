@@ -10,7 +10,7 @@ const router = express.Router({ mergeParams: true });
 router.get("/", protectAdmin, requireRole("admin"), async (req, res) => {
   try {
     const { barbershopId } = req.params;
-    const { startDate, endDate, type } = req.query;
+    const { startDate, endDate, type, isDeductible } = req.query;
 
     const filter = { barbershop: barbershopId };
 
@@ -27,6 +27,11 @@ router.get("/", protectAdmin, requireRole("admin"), async (req, res) => {
       filter.type = type;
     }
 
+    // Filtro de Dedutíveis
+    if (isDeductible !== undefined) {
+      filter.isDeductible = isDeductible === "true";
+    }
+
     const costs = await OperationalCost.find(filter).sort({ date: -1 });
 
     res.json(costs);
@@ -41,7 +46,7 @@ router.get("/", protectAdmin, requireRole("admin"), async (req, res) => {
 router.post("/", protectAdmin, checkAccountStatus, requireRole("admin"), async (req, res) => {
   try {
     const { barbershopId } = req.params;
-    const { type, description, amount, date, isRecurring, notes } = req.body;
+    const { type, description, amount, date, isRecurring, isDeductible, notes } = req.body;
 
     // Validação
     if (!type || !description || amount === undefined || !date) {
@@ -59,6 +64,7 @@ router.post("/", protectAdmin, checkAccountStatus, requireRole("admin"), async (
       amount,
       date: new Date(date),
       isRecurring: isRecurring || false,
+      isDeductible: isDeductible !== undefined ? isDeductible : true,
       notes: notes || "",
     });
 
@@ -77,7 +83,7 @@ router.post("/", protectAdmin, checkAccountStatus, requireRole("admin"), async (
 router.put("/:costId", protectAdmin, checkAccountStatus, requireRole("admin"), async (req, res) => {
   try {
     const { barbershopId, costId } = req.params;
-    const { type, description, amount, date, isRecurring, notes } = req.body;
+    const { type, description, amount, date, isRecurring, isDeductible, notes } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(costId)) {
       return res.status(400).json({ error: "ID do custo inválido." });
@@ -94,6 +100,7 @@ router.put("/:costId", protectAdmin, checkAccountStatus, requireRole("admin"), a
     }
     if (date !== undefined) updateData.date = new Date(date);
     if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
+    if (isDeductible !== undefined) updateData.isDeductible = isDeductible;
     if (notes !== undefined) updateData.notes = notes;
 
     const updatedCost = await OperationalCost.findOneAndUpdate(

@@ -23,6 +23,7 @@ import {
   CreditCard,
   Receipt,
   Bell,
+  Scale,
 } from "lucide-react"; // Ícones de exemplo
 import { useAuth } from "@/contexts/AuthContext";
 import apiClient from "@/services/api";
@@ -228,6 +229,12 @@ export function AdminLayout() {
           label: "Clientes",
           icon: <Users2 className="mr-2 h-4 w-4" />,
           roles: ["admin", "barber"],
+        },
+        {
+          to: "inteligencia-fiscal",
+          label: "Inteligência Fiscal",
+          icon: <Scale className="mr-2 h-4 w-4" />,
+          roles: ["admin"],
         },
       ],
     },

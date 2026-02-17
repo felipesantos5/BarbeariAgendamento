@@ -71,6 +71,16 @@ const ProductSchema = new Schema(
       min: 0,
       max: 100,
     },
+    ncm: {
+      type: String,
+      trim: true,
+      description: "Nomenclatura Comum do Mercosul",
+    },
+    cfop: {
+      type: String,
+      trim: true,
+      description: "Código Fiscal de Operações e Prestações",
+    },
   },
   {
     timestamps: true,

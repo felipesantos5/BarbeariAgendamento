@@ -26,6 +26,7 @@ import { RecurrencePage } from "./pages/RecurrencePage.tsx";
 import { CheckoutConfigPage } from "./pages/CheckoutConfigPage.tsx";
 import { OperationalCostsPage } from "./pages/OperationalCostsPage.tsx";
 import { WhatsAppConfigPage } from "./pages/WhatsAppConfigPage";
+import { FiscalDashboardPage } from "./pages/FiscalDashboardPage.tsx";
 import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
 import { SuperAdminBillingPage } from "./pages/superadmin/SuperAdminBillingPage";
@@ -77,6 +78,7 @@ export default function App() {
               <Route path="produtos" element={<ProductManagement />} />
               <Route path="recorrencia" element={<RecurrencePage />} />
               <Route path="custos-operacionais" element={<OperationalCostsPage />} />
+              <Route path="inteligencia-fiscal" element={<FiscalDashboardPage />} />
               <Route path="whatsapp" element={<WhatsAppConfigPage />} />
             </Route>
 

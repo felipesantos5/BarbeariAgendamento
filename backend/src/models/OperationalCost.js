@@ -46,6 +46,10 @@ const operationalCostSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isDeductible: {
+      type: Boolean,
+      default: true,
+    },
     notes: {
       type: String,
       trim: true,

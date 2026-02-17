@@ -46,6 +46,13 @@ interface BarbershopData {
   themeColor: string;
   LogoBackgroundColor: string;
   qrcode: string;
+  taxInfo?: {
+    regime: string;
+    cnpj: string;
+    municipalRegistration: string;
+    cnae: string;
+    simplesNacionalRate: number;
+  };
 }
 
 // ✅ ATUALIZADO (2/5): Estado inicial
@@ -69,6 +76,13 @@ const initialBarbershopState: Partial<BarbershopData> = {
   slug: "",
   qrcode: "",
   workingHours: [],
+  taxInfo: {
+    regime: "Não Informado",
+    cnpj: "",
+    municipalRegistration: "",
+    cnae: "",
+    simplesNacionalRate: 6,
+  },
 };
 
 const daysOfWeek = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -244,15 +258,16 @@ export function BarbeariaConfigPage() {
 
     // Remove _id e outros campos não editáveis do formData antes de enviar para o PUT
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { _id, qrcode, ...dataToUpdateClean } = formData as any;
-
-    const payload = {
-      ...dataToUpdateClean,
-      logoUrl: finalLogoUrl,
-    };
+    const { _id, qrcode, ...rest } = formData as any;
 
     try {
-      const updateResponse = await apiClient.put(`${API_BASE_URL}/barbershops/${barbershopId}`, payload);
+      // Garante que taxInfo existe antes de enviar
+      const finalPayload = {
+        ...rest,
+        logoUrl: finalLogoUrl,
+      };
+
+      const updateResponse = await apiClient.put(`${API_BASE_URL}/barbershops/${barbershopId}`, finalPayload);
       setSuccessMessage("Dados da barbearia atualizados com sucesso!");
       setFormData(updateResponse.data);
       setLogoRemoved(false); // Reset após salvamento bem-sucedido
@@ -329,6 +344,99 @@ export function BarbeariaConfigPage() {
             <Input id="slug" name="slug" value={formData.slug || ""} onChange={handleInputChange} required />
             <p className="text-xs text-gray-500">Ex: nome-da-barbearia (usado na URL da sua página)</p>
           </div>
+
+          <fieldset className="border p-4 rounded-md">
+            <legend className="text-lg font-semibold px-1">Informações Fiscais</legend>
+            <div className="space-y-4 mt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="regime">Regime Tributário</Label>
+                  <Select
+                    value={formData.taxInfo?.regime || "Não Informado"}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        taxInfo: { ...(prev?.taxInfo as any), regime: value },
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="regime">
+                      <SelectValue placeholder="Selecione o regime" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Não Informado">Não Informado</SelectItem>
+                      <SelectItem value="MEI">MEI (Microempreendedor Individual)</SelectItem>
+                      <SelectItem value="Simples Nacional">Simples Nacional (ME/EPP)</SelectItem>
+                      <SelectItem value="Lucro Presumido">Lucro Presumido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tax-cnpj">CNPJ</Label>
+                  <Input
+                    id="tax-cnpj"
+                    value={formData.taxInfo?.cnpj || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        taxInfo: { ...(prev?.taxInfo as any), cnpj: e.target.value },
+                      }))
+                    }
+                    placeholder="00.000.000/0000-00"
+                  />
+                </div>
+              </div>
+
+              {formData.taxInfo?.regime === "Simples Nacional" && (
+                <div className="space-y-2">
+                  <Label htmlFor="simples-rate">Alíquota Base Simples Nacional (%)</Label>
+                  <Input
+                    id="simples-rate"
+                    type="number"
+                    step="0.01"
+                    value={formData.taxInfo?.simplesNacionalRate || 6}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        taxInfo: { ...(prev?.taxInfo as any), simplesNacionalRate: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">Geralmente 6% para serviços de barbearia no Anexo III.</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="municipalRegistration">Inscrição Municipal</Label>
+                  <Input
+                    id="municipalRegistration"
+                    value={formData.taxInfo?.municipalRegistration || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        taxInfo: { ...(prev?.taxInfo as any), municipalRegistration: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cnae">CNAE Principal</Label>
+                  <Input
+                    id="cnae"
+                    value={formData.taxInfo?.cnae || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        taxInfo: { ...(prev?.taxInfo as any), cnae: e.target.value },
+                      }))
+                    }
+                    placeholder="Ex: 9602-5/01"
+                  />
+                </div>
+              </div>
+            </div>
+          </fieldset>
 
           <div className="space-y-2">
             <ImageUploader

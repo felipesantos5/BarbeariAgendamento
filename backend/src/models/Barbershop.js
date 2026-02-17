@@ -102,6 +102,21 @@ const BarbershopSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    taxInfo: {
+      regime: {
+        type: String,
+        enum: ["MEI", "Simples Nacional", "Lucro Presumido", "Não Informado"],
+        default: "Não Informado",
+      },
+      cnpj: { type: String, trim: true },
+      municipalRegistration: { type: String, trim: true },
+      cnae: { type: String, trim: true },
+      simplesNacionalRate: {
+        type: Number,
+        default: 6, // Alíquota base comum de 6%
+        min: 0,
+      },
+    },
   },
   { timestamps: true }
 );

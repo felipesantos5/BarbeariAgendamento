@@ -38,6 +38,7 @@ import superAdminRoutes from "./routes/superAdminRoutes.js";
 import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
 import whatsappRoutes from "./routes/whatsappRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
+import taxAnalyticsRoutes from "./routes/taxAnalytics.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
@@ -132,6 +133,7 @@ app.use("/api/barbershops/:barbershopId/barber-performance", protectAdmin, check
 app.use("/api/barbershops/:barbershopId/admin/bookings", protectAdmin, checkAccountStatus, manualBookingRoutes);
 app.use("/api/barbershops/:barbershopId/admin/operational-costs", operationalCostRoutes);
 app.use("/api/barbershops/:barbershopId/whatsapp", protectAdmin, checkAccountStatus, whatsappRoutes);
+app.use("/api/barbershops/:barbershopId/tax-analytics", protectAdmin, checkAccountStatus, taxAnalyticsRoutes);
 
 // Form
 app.use('/api/leads', leadRoutes);

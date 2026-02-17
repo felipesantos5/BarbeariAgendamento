@@ -122,6 +122,8 @@ export const ProductManagement = () => {
     status: "ativo" | "inativo" | "descontinuado";
     image: string;
     commissionRate?: number;
+    ncm?: string;
+    cfop?: string;
   }
 
   const [productForm, setProductForm] = useState<ProductForm>({
@@ -134,6 +136,8 @@ export const ProductManagement = () => {
     status: "ativo",
     image: "",
     commissionRate: undefined,
+    ncm: "",
+    cfop: "",
   });
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
 
@@ -350,6 +354,8 @@ export const ProductManagement = () => {
       status: "ativo",
       image: "",
       commissionRate: undefined,
+      ncm: "",
+      cfop: "",
     });
     setProductImageFile(null);
     setSelectedProduct(null);
@@ -399,6 +405,8 @@ export const ProductManagement = () => {
         status: product.status,
         image: product.image || "",
         commissionRate: product.commissionRate || undefined,
+        ncm: (product as any).ncm || "",
+        cfop: (product as any).cfop || "",
       });
       setProductImageFile(null);
     } else {
@@ -924,6 +932,37 @@ export const ProductManagement = () => {
                     placeholder="Ex: 15"
                   />
                   {errors.commissionRate && <p className="text-sm text-red-500">{errors.commissionRate}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ncm">NCM</Label>
+                  <Input
+                    id="ncm"
+                    value={productForm.ncm}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        ncm: e.target.value,
+                      }))
+                    }
+                    placeholder="Nomenclatura Comum do Mercosul"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cfop">CFOP Padrão</Label>
+                  <Input
+                    id="cfop"
+                    value={productForm.cfop}
+                    onChange={(e) =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        cfop: e.target.value,
+                      }))
+                    }
+                    placeholder="Código Fiscal de Operações"
+                  />
                 </div>
               </div>
 

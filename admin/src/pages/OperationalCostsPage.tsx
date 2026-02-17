@@ -37,6 +37,7 @@ interface OperationalCost {
   amount: number;
   date: string;
   isRecurring: boolean;
+  isDeductible: boolean;
   notes?: string;
 }
 
@@ -67,6 +68,7 @@ const initialCostState: Omit<OperationalCost, "_id"> = {
   amount: 0,
   date: new Date().toISOString().split("T")[0],
   isRecurring: false,
+  isDeductible: true,
   notes: "",
 };
 
@@ -352,6 +354,7 @@ export function OperationalCostsPage() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-center">Recorrente</TableHead>
+                <TableHead className="text-center">Dedutível</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="w-[100px] text-center">Ações</TableHead>
               </TableRow>
@@ -378,6 +381,13 @@ export function OperationalCostsPage() {
                     <TableCell className="text-center">
                       {cost.isRecurring ? (
                         <span className="text-blue-600 text-xs">Sim</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Não</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {cost.isDeductible !== false ? (
+                        <span className="text-green-600 text-xs font-bold">Sim</span>
                       ) : (
                         <span className="text-gray-400 text-xs">Não</span>
                       )}
@@ -518,6 +528,25 @@ export function OperationalCostsPage() {
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
                 Este é um custo recorrente (mensal)
+              </label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isDeductible"
+                checked={currentCost.isDeductible !== false}
+                onCheckedChange={(checked: any) =>
+                  setCurrentCost({
+                    ...currentCost,
+                    isDeductible: checked as boolean,
+                  })
+                }
+              />
+              <label
+                htmlFor="isDeductible"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                Esta despesa é dedutível de impostos (Lei do Salão-Parceiro)
               </label>
             </div>
           </div>
