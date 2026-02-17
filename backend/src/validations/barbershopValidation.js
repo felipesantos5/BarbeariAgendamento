@@ -19,6 +19,14 @@ export const WorkingHourSchema = z.object({
 
 const hexColorRegex = /^#([0-9A-Fa-f]{6})$/;
 
+export const TaxInfoSchema = z.object({
+  regime: z.enum(["MEI", "Simples Nacional", "Lucro Presumido", "Não Informado"]).optional().default("Não Informado"),
+  cnpj: z.string().optional().or(z.literal("")),
+  municipalRegistration: z.string().optional().or(z.literal("")),
+  cnae: z.string().optional().or(z.literal("")),
+  simplesNacionalRate: z.number().min(0).optional().default(6),
+});
+
 export const BarbershopSchema = z.object({
   name: z.string().min(2, "Nome obrigatório"),
   description: z.string().max(300, "Descrição muito longa").optional().default(""),
@@ -48,6 +56,7 @@ export const BarbershopSchema = z.object({
       rewardDescription: z.string().trim().optional(),
     })
     .optional(),
+  taxInfo: TaxInfoSchema.optional(),
 });
 
 export const BarbershopCreationSchema = BarbershopSchema.extend({

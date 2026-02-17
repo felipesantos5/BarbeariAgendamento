@@ -5,6 +5,7 @@ import Subscription from "../models/Subscription.js";
 import StockMovement from "../models/StockMovement.js";
 import Barbershop from "../models/Barbershop.js";
 import { protectAdmin, requireRole } from "../middleware/authAdminMiddleware.js";
+import { calculateEstimatedTax, TAX_RATES } from "../config/taxConfig.js";
 
 const router = express.Router({ mergeParams: true });
 
@@ -141,49 +142,64 @@ router.get("/projection", protectAdmin, requireRole("admin"), async (req, res) =
     // O imposto incide apenas sobre o que sobra após pagar as comissões (cotaparte do salão)
     const taxableRevenue = Math.max(0, grossRevenue - totalCommissions);
 
-    // 3. Calcular Projeção de Imposto
-    const taxInfo = barbershop.taxInfo || {};
-    let estimatedTax = 0;
-    let taxDetails = "";
+    // 3. Detectar Meses Operados (Meses com algum faturamento)
+    const [bookingMonths, movementMonths, subscriptionMonths] = await Promise.all([
+      Booking.distinct("time", { barbershop: barbershopMongoId, status: "completed", time: timeQuery }),
+      StockMovement.distinct("createdAt", { barbershop: barbershopMongoId, type: "venda", createdAt: timeQuery }),
+      Subscription.distinct("createdAt", { barbershop: barbershopMongoId, createdAt: timeQuery })
+    ]);
 
-    switch (taxInfo.regime) {
-      case "MEI":
-        // Valor fixo aproximado do DAS MEI 2024 (Comércio e Serviços)
-        estimatedTax = 75.60;
-        taxDetails = "Valor fixo mensal do DAS-MEI.";
-        break;
-      case "Simples Nacional":
-        const rate = (taxInfo.simplesNacionalRate || 6) / 100;
-        estimatedTax = taxableRevenue * rate;
-        taxDetails = `Alíquota de ${(rate * 100).toFixed(2)}% sobre faturamento tributável (Lei do Salão-Parceiro).`;
-        break;
-      case "Lucro Presumido":
-        // Cálculo simplificado de Lucro Presumido (Serviços aprox 13.33% a 16.33%)
-        estimatedTax = taxableRevenue * 0.15;
-        taxDetails = "Estimativa base de 15% (PIS/COFINS/ISS/IRPJ/CSLL) sobre faturamento tributável.";
-        break;
-      default:
-        estimatedTax = 0;
-        taxDetails = "Regime fiscal não configurado.";
+    const allDates = [...bookingMonths, ...movementMonths, ...subscriptionMonths];
+    const uniqueMonths = new Set(allDates.map(d => {
+      const date = new Date(d);
+      return `${date.getFullYear()}-${date.getMonth()}`;
+    }));
+
+    const activeMonthsCount = Math.max(1, uniqueMonths.size);
+
+    // 4. Calcular Projeção de Imposto
+    const taxInfo = barbershop.taxInfo || {};
+    const estimatedTax = calculateEstimatedTax(
+      taxInfo.regime, 
+      taxableRevenue, 
+      taxInfo.regime === "Simples Nacional" ? taxInfo.simplesNacionalRate : null,
+      activeMonthsCount
+    );
+
+    let taxDetails = "";
+    if (taxInfo.regime === "MEI") {
+      taxDetails = `Valor fixo de R$ ${TAX_RATES.MEI_FIXED_VALUE.toFixed(2)} x ${activeMonthsCount} mês(es) operado(s).`;
+    } else if (taxInfo.regime === "Simples Nacional") {
+      const currentRate = taxInfo.simplesNacionalRate || TAX_RATES.SIMPLES_NACIONAL.DEFAULT_RATE;
+      taxDetails = `Alíquota de ${currentRate}% sobre faturamento tributável.`;
+    } else if (taxInfo.regime === "Lucro Presumido") {
+      taxDetails = `Estimativa de ${TAX_RATES.LUCRO_PRESUMIDO.ESTIMATED_TOTAL_RATE}% sobre faturamento tributável.`;
+    } else {
+      taxDetails = "Regime fiscal não configurado.";
     }
+
+    const netAfterTax = grossRevenue - totalCommissions - estimatedTax;
 
     res.json({
       success: true,
-      period: { startDate: timeQuery.$gte, endDate: timeQuery.$lte },
+      period: { 
+        start: timeQuery.$gte, 
+        end: timeQuery.$lte 
+      },
       metrics: {
         grossRevenue,
         totalCommissions,
         taxableRevenue,
         estimatedTax,
+        netAfterTax
       },
-      taxInfo: {
+      taxRegime: {
         regime: taxInfo.regime || "Não Informado",
+        rate: taxInfo.regime === "Simples Nacional" ? (taxInfo.simplesNacionalRate || TAX_RATES.SIMPLES_NACIONAL.DEFAULT_RATE) : 
+              taxInfo.regime === "Lucro Presumido" ? TAX_RATES.LUCRO_PRESUMIDO.ESTIMATED_TOTAL_RATE : 0,
+        leiSalaoParceiroApplied: true, // No backend já está aplicando a lógica
         cnpj: taxInfo.cnpj,
         details: taxDetails,
-      },
-      lawSupport: {
-        isLawApplied: true,
-        description: "Salão-Parceiro: Comissões deduzidas da base de cálculo tributária.",
       }
     });
 
