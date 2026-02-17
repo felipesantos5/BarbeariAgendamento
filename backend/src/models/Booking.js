@@ -38,5 +38,8 @@ const BookingSchema = new Schema(
 
 BookingSchema.index({ barber: 1, time: 1 });
 BookingSchema.index({ barbershop: 1, time: -1 });
+BookingSchema.index({ status: 1, time: 1 });
+BookingSchema.index({ barbershop: 1, status: 1, time: 1 });
+BookingSchema.index({ createdAt: 1 });
 
 export default mongoose.model("Booking", BookingSchema);
