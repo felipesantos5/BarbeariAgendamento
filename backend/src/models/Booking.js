@@ -42,4 +42,10 @@ BookingSchema.index({ status: 1, time: 1 });
 BookingSchema.index({ barbershop: 1, status: 1, time: 1 });
 BookingSchema.index({ createdAt: 1 });
 
+// ✅ Único agendamento ativo por barbeiro/horário (Previne Race Condition)
+BookingSchema.index(
+  { barber: 1, time: 1 },
+  { unique: true, partialFilterExpression: { status: { $nin: ["canceled", "payment_expired"] } } }
+);
+
 export default mongoose.model("Booking", BookingSchema);

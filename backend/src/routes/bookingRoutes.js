@@ -222,6 +222,14 @@ router.post("/", appointmentLimiter, async (req, res) => {
     }
   } catch (e) {
     console.error("ERRO AO CRIAR AGENDAMENTO:", e);
+
+    // ✅ TRATAMENTO DE RACE CONDITION (Erro de índice único)
+    if (e.code === 11000) {
+      return res.status(409).json({
+        error: "Este horário acabou de ser preenchido por outro cliente. Por favor, escolha outro horário.",
+      });
+    }
+
     if (e instanceof z.ZodError) {
       return res.status(400).json({
         error: "Dados de agendamento inválidos.",
@@ -622,11 +630,22 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
       const todaysBookings = bookingsByDay.get(dayString) || [];
       const todaysTimeBlocks = timeBlocks.filter((tb) => tb.startTime < dayEnd && tb.endTime > dayStart);
 
+      // Pre-calc intervals for faster lookup
+      const intervals = [
+        ...todaysBookings.map(b => ({
+          start: new Date(b.time).getTime(),
+          end: new Date(new Date(b.time).getTime() + (b.service?.duration || serviceDuration) * 60000).getTime()
+        })),
+        ...todaysTimeBlocks.map(tb => ({
+          start: new Date(tb.startTime).getTime(),
+          end: new Date(tb.endTime).getTime()
+        }))
+      ];
+
       // ---- VALIDAÇÃO ADICIONADA ----
       // Ajusta o ponto de partida da verificação para o dia de hoje
       let initialSlotTime = new Date(dayStart);
       if (isToday(day) && nowInBrazil > initialSlotTime) {
-        // Define a hora inicial como a hora atual se já passamos do início do expediente
         initialSlotTime = nowInBrazil;
       }
       // -----------------------------
@@ -634,33 +653,15 @@ router.get("/:barberId/monthly-availability", async (req, res) => {
       let currentSlotTime = new Date(initialSlotTime);
 
       while (currentSlotTime < dayEnd) {
-        const potentialEndTime = new Date(currentSlotTime.getTime() + serviceDuration * 60000);
+        const slotStartTs = currentSlotTime.getTime();
+        const slotEndTs = slotStartTs + serviceDuration * 60000;
 
-        if (potentialEndTime > dayEnd) break;
+        if (slotEndTs > dayEnd.getTime()) break;
 
-        let hasConflict = false;
-
-        // Verifica conflito com agendamentos
-        for (const booking of todaysBookings) {
-          const bookingStart = new Date(booking.time);
-          const bookingEnd = new Date(bookingStart.getTime() + (booking.service?.duration || serviceDuration) * 60000);
-          if (currentSlotTime < bookingEnd && potentialEndTime > bookingStart) {
-            hasConflict = true;
-            break;
-          }
-        }
-        if (hasConflict) {
-          currentSlotTime.setMinutes(currentSlotTime.getMinutes() + slotInterval);
-          continue;
-        }
-
-        // Verifica conflito com bloqueios de tempo
-        for (const block of todaysTimeBlocks) {
-          if (currentSlotTime < new Date(block.endTime) && potentialEndTime > new Date(block.startTime)) {
-            hasConflict = true;
-            break;
-          }
-        }
+        // Optimized conflict check: O(N_intervals) instead of O(N_bookings + N_blocks) in every slot
+        const hasConflict = intervals.some(interval => 
+          slotStartTs < interval.end && slotEndTs > interval.start
+        );
 
         if (!hasConflict) {
           hasAvailableSlot = true;

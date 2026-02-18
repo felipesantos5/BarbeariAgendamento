@@ -156,8 +156,9 @@ router.post("/webhook", async (req, res) => {
         // --- LÓGICA DE CONFIRMAÇÃO ---
         // Se o pagamento foi APROVADO...
         if (paymentStatus === "approved") {
-          // ...e era um pagamento OBRIGATÓRIO que estava PENDENTE...
-          if (booking.isPaymentMandatory && booking.status === "pending_payment") {
+          // ...e era um pagamento OBRIGATÓRIO que estava PENDENTE (ou se já foi confirmado, evitamos repetir notificações)
+          if (booking.isPaymentMandatory && (booking.status === "pending_payment" || booking.status === "booked")) {
+            const wasConfirmed = booking.status === "confirmed";
             booking.status = "confirmed"; // ✅ Confirma o agendamento
 
             console.log(`Webhook: Booking ${bookingId} (obrigatório) foi PAGO. Status atualizado para 'confirmed'.`);
@@ -170,18 +171,27 @@ router.post("/webhook", async (req, res) => {
               { path: "service", select: "name" },
             ]);
 
-            // Envia WhatsApp
-            const formattedTime = formatBookingTime(booking.time, true);
-            const cleanPhoneNumber = booking.barbershop.contact.replace(/\D/g, "");
-            const whatsappLink = `https://wa.me/55${cleanPhoneNumber}`;
-            const message = `Olá, ${booking.customer.name}! Seu pagamento foi aprovado e seu agendamento na ${booking.barbershop.name} está confirmado para ${formattedTime} ✅\n\nNos vemos lá! 💈\n\nFale com a barbearia: ${whatsappLink}`;
+            // Se já não estava confirmado antes desse webhook, envia notificações
+            if (!wasConfirmed) {
+              try {
+                // Envia WhatsApp
+                const formattedTime = formatBookingTime(booking.time, true);
+                const cleanPhoneNumber = booking.barbershop.contact.replace(/\D/g, "");
+                const whatsappLink = `https://wa.me/55${cleanPhoneNumber}`;
+                const message = `Olá, ${booking.customer.name}! Seu pagamento foi aprovado e seu agendamento na ${booking.barbershop.name} está confirmado para ${formattedTime} ✅\n\nNos vemos lá! 💈\n\nFale com a barbearia: ${whatsappLink}`;
 
-            sendWhatsAppConfirmation(booking.customer.phone, message);
+                sendWhatsAppConfirmation(booking.customer.phone, message).catch(err => 
+                  console.error("[Webhook] Erro ao enviar WhatsApp (silencioso):", err.message)
+                );
 
-            // Envia SSE
-            sendEventToBarbershop(barbershopId, "new_booking", booking.toObject());
+                // Envia SSE
+                sendEventToBarbershop(barbershopId, "new_booking", booking.toObject());
+              } catch (notifyErr) {
+                console.error("[Webhook] Erro durante notificações (não impede retorno 200):", notifyErr.message);
+              }
+            }
           } else {
-            console.log(`Webhook: Booking ${bookingId} (opcional) foi PAGO. Status atualizado.`);
+            console.log(`Webhook: Booking ${bookingId} (opcional ou já pago) foi PAGO. Status atualizado.`);
           }
         }
 
@@ -193,10 +203,12 @@ router.post("/webhook", async (req, res) => {
       console.warn(`Webhook: Pagamento ${paymentId} não encontrado no Mercado Pago ou não possui external_reference.`);
     }
 
-    res.sendStatus(200);
+    // SEMPRE responde 200 se chegou até aqui para evitar re-envios infinitos do MP
+    res.status(200).send("OK");
   } catch (error) {
-    console.error("❌ Erro ao processar webhook:", error);
-    res.sendStatus(500); // Responde 500 para o MP tentar de novo
+    console.error("❌ Erro Crítico ao processar webhook:", error.message);
+    // Em caso de erro real de código/banco, respondemos 500 para o MP tentar de novo depois
+    res.status(500).json({ error: error.message });
   }
 });
 

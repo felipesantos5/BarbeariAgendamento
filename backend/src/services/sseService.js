@@ -94,15 +94,25 @@ function sendEventToBarbershop(barbershopId, eventName, data = {}) {
     const deadClients = [];
     barbershopClients.forEach((client) => {
       try {
-        client.write(message);
+        const success = client.write(message);
+        if (!success) {
+          console.warn("[SSE] Write returned false, connection might be congested or dead.");
+        }
       } catch (err) {
-        console.error(`[SSE] Erro ao enviar mensagem, removendo cliente morto:`, err.message);
+        console.error(`[SSE] Erro ao enviar mensagem para barbearia ${barbershopId}:`, err.message);
         deadClients.push(client);
       }
     });
 
     // Remove dead connections
-    deadClients.forEach((client) => removeClient(barbershopId, client));
+    if (deadClients.length > 0) {
+      deadClients.forEach((client) => {
+        try {
+          removeClient(barbershopId, client);
+          client.end();
+        } catch (e) {}
+      });
+    }
   }
 }
 
