@@ -439,7 +439,7 @@ router.delete("/disconnect", protectAdmin, async (req, res) => {
 router.put("/settings", protectAdmin, async (req, res) => {
   try {
     const { barbershopId } = req.params;
-    const { morningReminderTime, afternoonReminderTime } = req.body;
+    const { morningReminderTime, afternoonReminderTime, enabled } = req.body;
 
     const barbershop = await Barbershop.findById(barbershopId);
     if (!barbershop) {
@@ -447,7 +447,12 @@ router.put("/settings", protectAdmin, async (req, res) => {
     }
 
     if (!barbershop.whatsappConfig) {
-      barbershop.whatsappConfig = {};
+      barbershop.whatsappConfig = {
+        enabled: true,
+        connectionStatus: "disconnected",
+        morningReminderTime: "08:00",
+        afternoonReminderTime: "13:00"
+      };
     }
 
     if (morningReminderTime) {
@@ -458,10 +463,15 @@ router.put("/settings", protectAdmin, async (req, res) => {
       barbershop.set("whatsappConfig.afternoonReminderTime", afternoonReminderTime);
     }
 
+    if (typeof enabled === 'boolean') {
+      barbershop.set("whatsappConfig.enabled", enabled);
+    }
+
     await barbershop.save();
 
     res.json({
       message: "Configurações de WhatsApp atualizadas com sucesso",
+      enabled: barbershop.whatsappConfig.enabled,
       morningReminderTime: barbershop.whatsappConfig.morningReminderTime,
       afternoonReminderTime: barbershop.whatsappConfig.afternoonReminderTime,
     });

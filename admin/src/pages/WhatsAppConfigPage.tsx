@@ -21,6 +21,7 @@ import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw,
 import { AdminOutletContext } from "@/types/AdminOutletContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PhoneFormat } from "@/helper/phoneFormater";
+import { Switch } from "@/components/ui/switch";
 
 interface WhatsAppStatus {
   status: "disconnected" | "connecting" | "connected";
@@ -48,6 +49,7 @@ export const WhatsAppConfigPage = () => {
   const [qrCodeTimer, setQrCodeTimer] = useState<number>(QR_CODE_EXPIRY_TIME);
   const [morningTime, setMorningTime] = useState("08:00");
   const [afternoonTime, setAfternoonTime] = useState("13:00");
+  const [isEnabled, setIsEnabled] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
@@ -89,6 +91,7 @@ export const WhatsAppConfigPage = () => {
       const response = await apiClient.get(`/api/barbershops/${barbershopId}/whatsapp/status`);
       const data = response.data;
       setWhatsappStatus(data);
+      setIsEnabled(data.enabled || false);
       if (data.morningReminderTime) setMorningTime(data.morningReminderTime);
       if (data.afternoonReminderTime) setAfternoonTime(data.afternoonReminderTime);
     } catch (error: any) {
@@ -252,11 +255,13 @@ export const WhatsAppConfigPage = () => {
       const response = await apiClient.put(`/api/barbershops/${barbershopId}/whatsapp/settings`, {
         morningReminderTime: morningTime,
         afternoonReminderTime: afternoonTime,
+        enabled: isEnabled,
       });
 
-      // Atualiza o estado local do status para refletir os novos horários
+      // Atualiza o estado local do status para refletir as novas configurações
       setWhatsappStatus((prev) => prev ? ({
         ...prev,
+        enabled: response.data.enabled,
         morningReminderTime: response.data.morningReminderTime,
         afternoonReminderTime: response.data.afternoonReminderTime,
       }) : null);
@@ -267,6 +272,34 @@ export const WhatsAppConfigPage = () => {
       toast.error(error.response?.data?.error || "Erro ao salvar configurações");
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const handleToggleEnabled = async (checked: boolean) => {
+    setIsEnabled(checked);
+
+    // Opcional: Salvar imediatamente ao trocar o switch
+    try {
+      const response = await apiClient.put(`/api/barbershops/${barbershopId}/whatsapp/settings`, {
+        morningReminderTime: morningTime,
+        afternoonReminderTime: afternoonTime,
+        enabled: checked,
+      });
+
+      setWhatsappStatus((prev) => prev ? ({
+        ...prev,
+        enabled: response.data.enabled,
+      }) : null);
+
+      if (checked) {
+        toast.success("Mensagens automáticas ativadas!");
+      } else {
+        toast.success("Mensagens automáticas desativadas!");
+      }
+    } catch (error: any) {
+      setIsEnabled(!checked); // Reverte o switch em caso de erro
+      console.error("Erro ao alternar status:", error);
+      toast.error(error.response?.data?.error || "Erro ao alternar status");
     }
   };
 
@@ -296,163 +329,182 @@ export const WhatsAppConfigPage = () => {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Status Atual */}
-          <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/50">
-            <div className="space-y-1">
-              <Label className="text-base font-semibold">Status da Conexão</Label>
-              <div className="flex items-center gap-2">
-                {whatsappStatus?.status === "connected" && (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                      Conectado
-                    </Badge>
-                  </>
-                )}
-                {whatsappStatus?.status === "connecting" && (
-                  <>
-                    <Clock className="h-4 w-4 text-yellow-600 animate-pulse" />
-                    <Badge variant="default" className="bg-yellow-600 hover:bg-yellow-700">
-                      Conectando...
-                    </Badge>
-                  </>
-                )}
-                {whatsappStatus?.status === "disconnected" && (
-                  <>
-                    <AlertCircle className="h-4 w-4 text-gray-500" />
-                    <Badge variant="outline" className="text-gray-600">
-                      Desconectado
-                    </Badge>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {whatsappStatus?.status === "connected" && whatsappStatus.connectedNumber && (
-              <div className="text-right space-y-1">
-                <Label className="text-sm text-muted-foreground">Número Conectado</Label>
-                <p className="font-mono font-semibold text-lg">{PhoneFormat(whatsappStatus.connectedNumber)}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Instruções - Escondidas se estiver conectado */}
-          {whatsappStatus?.status !== "connected" && (
-            <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
-              <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
-              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
-                <li>Clique em "Conectar WhatsApp" abaixo</li>
-                <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
-                <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
-                <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
-              </ol>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
-                💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
+          {/* Switch de Ativação Geral */}
+          <div className="flex items-center justify-between p-4 rounded-lg border bg-primary/5">
+            <div className="space-y-0.5">
+              <Label className="text-base font-bold">Ativar Mensagens Automáticas</Label>
+              <p className="text-sm text-muted-foreground">
+                Habilita o envio de lembretes e mensagens via WhatsApp para seus clientes.
               </p>
-            </fieldset>
-          )}
+            </div>
+            <Switch
+              checked={isEnabled}
+              onCheckedChange={handleToggleEnabled}
+              className="scale-125"
+            />
+          </div>
 
-          {/* Ações */}
-          <div className="flex gap-3">
-            {whatsappStatus?.status !== "connected" ? (
-              <Button onClick={handleConnect} disabled={isConnecting} size="lg" className="w-full sm:w-auto">
-                {isConnecting ? (
+          {isEnabled && (
+            <>
+              {/* Status Atual */}
+              <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/50">
+                <div className="space-y-1">
+                  <Label className="text-base font-semibold">Status da Conexão</Label>
                   <div className="flex items-center gap-2">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    <span>Conectando...</span>
-                    <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">
-                      (Gerando conexão, aguarde...)
-                    </span>
+                    {whatsappStatus?.status === "connected" && (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                          Conectado
+                        </Badge>
+                      </>
+                    )}
+                    {whatsappStatus?.status === "connecting" && (
+                      <>
+                        <Clock className="h-4 w-4 text-yellow-600 animate-pulse" />
+                        <Badge variant="default" className="bg-yellow-600 hover:bg-yellow-700">
+                          Conectando...
+                        </Badge>
+                      </>
+                    )}
+                    {whatsappStatus?.status === "disconnected" && (
+                      <>
+                        <AlertCircle className="h-4 w-4 text-gray-500" />
+                        <Badge variant="outline" className="text-gray-600">
+                          Desconectado
+                        </Badge>
+                      </>
+                    )}
                   </div>
+                </div>
+
+                {whatsappStatus?.status === "connected" && whatsappStatus.connectedNumber && (
+                  <div className="text-right space-y-1">
+                    <Label className="text-sm text-muted-foreground">Número Conectado</Label>
+                    <p className="font-mono font-semibold text-lg">{PhoneFormat(whatsappStatus.connectedNumber)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Instruções - Escondidas se estiver conectado */}
+              {whatsappStatus?.status !== "connected" && (
+                <fieldset className="border p-4 rounded-md bg-blue-50/50 dark:bg-blue-950/20">
+                  <legend className="text-lg font-semibold px-2 text-blue-900 dark:text-blue-100">Como Funciona</legend>
+                  <ol className="list-decimal list-inside space-y-2 text-sm text-blue-800 dark:text-blue-200 mt-2">
+                    <li>Clique em "Conectar WhatsApp" abaixo</li>
+                    <li>Escaneie o QR Code que aparecerá com seu WhatsApp</li>
+                    <li>Aguarde a confirmação da conexão (leva alguns segundos)</li>
+                    <li>Pronto! As mensagens automáticas serão enviadas pelo seu número</li>
+                  </ol>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 italic">
+                    💡 Dica: Use um número exclusivo para o WhatsApp Business da sua barbearia.
+                  </p>
+                </fieldset>
+              )}
+
+              {/* Ações */}
+              <div className="flex gap-3">
+                {whatsappStatus?.status !== "connected" ? (
+                  <Button onClick={handleConnect} disabled={isConnecting} size="lg" className="w-full sm:w-auto">
+                    {isConnecting ? (
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span>Conectando...</span>
+                        <span className="text-xs font-normal text-muted-foreground animate-pulse ml-2">
+                          (Gerando conexão, aguarde...)
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Conectar WhatsApp
+                      </>
+                    )}
+                  </Button>
                 ) : (
                   <>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Conectar WhatsApp
+                    <Button
+                      variant="destructive"
+                      size="lg"
+                      onClick={() => setShowDisconnectDialog(true)}
+                      disabled={isDisconnecting}
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Desconectar
+                    </Button>
                   </>
                 )}
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="destructive"
-                  size="lg"
-                  onClick={() => setShowDisconnectDialog(true)}
-                  disabled={isDisconnecting}
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Desconectar
-                </Button>
-              </>
-            )}
-          </div>
-
-          <hr className="my-6" />
-
-          {/* Configurações Customizadas */}
-          <div className="space-y-4 pt-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Horários de Lembrete</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Defina o horário em que os lembretes automáticos serão enviados para seus clientes.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <div className="space-y-2">
-                <Label htmlFor="morningTime">Lembrete Período Manhã</Label>
-                <div className="flex flex-col gap-2">
-                  <Select value={morningTime} onValueChange={setMorningTime}>
-                    <SelectTrigger id="morningTime" className="w-full">
-                      <SelectValue placeholder="Selecione o horário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {timeOptions.map((time) => (
-                        <SelectItem key={`morning-${time}`} value={time}>
-                          {time}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="text-xs text-muted-foreground">
-                    Enviado para agendamentos até as 13:00
-                  </div>
-                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="afternoonTime">Lembrete Período Tarde</Label>
-                <div className="flex flex-col gap-2">
-                  <Select value={afternoonTime} onValueChange={setAfternoonTime}>
-                    <SelectTrigger id="afternoonTime" className="w-full">
-                      <SelectValue placeholder="Selecione o horário" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {timeOptions.map((time) => (
-                        <SelectItem key={`afternoon-${time}`} value={time}>
-                          {time}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="text-xs text-muted-foreground">
-                    Enviado para agendamentos após as 13:00
+              <hr className="my-6" />
+
+              {/* Configurações Customizadas */}
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Horários de Lembrete</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Defina o horário em que os lembretes automáticos serão enviados para seus clientes.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="morningTime">Lembrete Período Manhã</Label>
+                    <div className="flex flex-col gap-2">
+                      <Select value={morningTime} onValueChange={setMorningTime}>
+                        <SelectTrigger id="morningTime" className="w-full">
+                          <SelectValue placeholder="Selecione o horário" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeOptions.map((time) => (
+                            <SelectItem key={`morning-${time}`} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-muted-foreground">
+                        Enviado para agendamentos até as 13:00
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="afternoonTime">Lembrete Período Tarde</Label>
+                    <div className="flex flex-col gap-2">
+                      <Select value={afternoonTime} onValueChange={setAfternoonTime}>
+                        <SelectTrigger id="afternoonTime" className="w-full">
+                          <SelectValue placeholder="Selecione o horário" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timeOptions.map((time) => (
+                            <SelectItem key={`afternoon-${time}`} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-muted-foreground">
+                        Enviado para agendamentos após as 13:00
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
-                {isSavingSettings ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Salvar Configurações de Horário
-              </Button>
-            </div>
-          </div>
+                <div className="flex justify-end pt-2">
+                  <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
+                    {isSavingSettings ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Salvar Configurações de Horário
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

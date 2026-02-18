@@ -85,7 +85,7 @@ const BarbershopSchema = new mongoose.Schema(
       default: "active",
     },
     whatsappConfig: {
-      enabled: { type: Boolean, default: false },
+      enabled: { type: Boolean, default: true },
       instanceName: { type: String, default: null },
       connectionStatus: {
         type: String,
