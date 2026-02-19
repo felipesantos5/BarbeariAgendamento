@@ -112,18 +112,18 @@ export function SuperAdminBillingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Faturamento</h1>
           <p className="text-slate-400 text-sm">Controle financeiro da plataforma</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-slate-800 border border-slate-700 p-1 px-2 rounded-lg gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-1 items-center bg-slate-800 border border-slate-700 p-1 px-2 rounded-lg gap-2 min-w-0">
             <select
               value={filter.month}
               onChange={(e) => setFilter(prev => ({ ...prev, month: e.target.value === 'all' ? 'all' : parseInt(e.target.value) }))}
-              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+              className="flex-1 bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white min-w-0"
             >
               <option value="all" className="bg-slate-900">Tempo Completo</option>
               {months.map((m, i) => (
@@ -131,12 +131,12 @@ export function SuperAdminBillingPage() {
               ))}
             </select>
 
-            <div className="w-px h-3 bg-slate-700" />
+            <div className="w-px h-3 bg-slate-700 shrink-0" />
 
             <select
               value={filter.year}
               onChange={(e) => setFilter(prev => ({ ...prev, year: parseInt(e.target.value) }))}
-              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white shrink-0"
               disabled={filter.month === 'all'}
             >
               {years.map(y => (
@@ -149,7 +149,7 @@ export function SuperAdminBillingPage() {
             onClick={fetchData}
             variant="outline"
             size="sm"
-            className="bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="flex-1 sm:flex-none bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar

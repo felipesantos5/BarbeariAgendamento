@@ -140,30 +140,30 @@ export function SuperAdminExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Despesas</h1>
           <p className="text-slate-400 text-sm">Gerenciamento de custos operacionais</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-slate-800 border border-slate-700 p-1 px-2 rounded-lg gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-1 items-center bg-slate-800 border border-slate-700 p-1 px-2 rounded-lg gap-2 min-w-0">
             <select
               value={filter.month}
               onChange={(e) => setFilter(prev => ({ ...prev, month: parseInt(e.target.value) }))}
-              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+              className="flex-1 bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white min-w-0"
             >
               {months.map((m, i) => (
                 <option key={m} value={i} className="bg-slate-900">{m}</option>
               ))}
             </select>
 
-            <div className="w-px h-3 bg-slate-700" />
+            <div className="w-px h-3 bg-slate-700 shrink-0" />
 
             <select
               value={filter.year}
               onChange={(e) => setFilter(prev => ({ ...prev, year: parseInt(e.target.value) }))}
-              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white"
+              className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer focus:text-white shrink-0"
             >
               {years.map(y => (
                 <option key={y} value={y} className="bg-slate-900">{y}</option>
@@ -171,25 +171,27 @@ export function SuperAdminExpensesPage() {
             </select>
           </div>
 
-          <Button
-            onClick={handleCreate}
-            variant="default"
-            size="sm"
-            className="bg-blue-500 hover:bg-blue-600 text-white font-bold"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Despesa
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              onClick={handleCreate}
+              variant="default"
+              size="sm"
+              className="flex-1 sm:flex-none bg-blue-500 hover:bg-blue-600 text-white font-bold"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Despesa
+            </Button>
 
-          <Button
-            onClick={fetchData}
-            variant="outline"
-            size="sm"
-            className="bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Atualizar
-          </Button>
+            <Button
+              onClick={fetchData}
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Atualizar
+            </Button>
+          </div>
         </div>
       </div>
 

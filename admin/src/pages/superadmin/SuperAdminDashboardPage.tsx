@@ -313,15 +313,14 @@ export function SuperAdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <div className="flex gap-2">
-
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-white">Dashboard Master</h1>
+        <div className="flex gap-2 w-full sm:w-auto">
           <Button
             onClick={() => setCreateModalOpen(true)}
             variant="default"
             size="sm"
-            className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-sm"
+            className="flex-1 sm:flex-none bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 shadow-sm"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nova Barbearia
@@ -330,7 +329,7 @@ export function SuperAdminDashboardPage() {
             onClick={fetchData}
             variant="outline"
             size="sm"
-            className="bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+            className="flex-1 sm:flex-none bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Atualizar
