@@ -82,6 +82,7 @@ const sendDailyReminders = async (triggerTime) => {
     ));
 
     let sentCount = 0;
+    let failureDetails = [];
 
     for (const booking of bookings) {
       if (!booking.customer || !booking.barbershop || !booking.barber) {
@@ -139,14 +140,23 @@ const sendDailyReminders = async (triggerTime) => {
           `[CRON] Circuit breaker bloqueou envios. Parando tentativas. ` +
           `Enviados: ${sentCount}/${bookings.length}. Próxima tentativa em ${result.retryIn}s.`
         );
+        failureDetails.push(`[Circuit Breaker] Bloqueado - ${bookings.length - sentCount} mensagens não enviadas`);
         break; // Sai do loop - não adianta continuar tentando
+      } else {
+        // Loga o motivo da falha individual para diagnóstico
+        const reason = result.error || result.code || "Erro desconhecido";
+        const statusPart = result.status ? ` [HTTP ${result.status}]` : "";
+        console.warn(
+          `[CRON] ⚠️  Falha ao enviar para ${customerPhone}${statusPart}: ${reason}`
+        );
+        failureDetails.push(`${customerPhone}: ${reason}${statusPart}`);
       }
-      // Se falhou mas não está bloqueado, continua tentando os próximos
 
-      // Pausa aleatória entre mensagens (apenas se não estiver bloqueado)
+      // Pausa aleatória entre mensagens — espaço suficiente para os retries internos
+      // e para não sobrepor disparos seguidos na Evolution API
       if (!result.blocked) {
-        const MIN_DELAY = 20000; // 20 segundos
-        const MAX_DELAY = 45000; // 45 segundos
+        const MIN_DELAY = 30000; // 30 segundos
+        const MAX_DELAY = 60000; // 60 segundos
         const randomDelay = Math.floor(Math.random() * (MAX_DELAY - MIN_DELAY + 1)) + MIN_DELAY;
         await delay(randomDelay);
       }
@@ -154,14 +164,27 @@ const sendDailyReminders = async (triggerTime) => {
 
     console.log(`[CRON] Lembretes enviados: ${sentCount}/${bookings.length}`);
 
+    const embedColor = sentCount === bookings.length ? 5763719 : (sentCount > 0 ? 16753920 : 15548997); // Verde / Laranja / Vermelho
+    const embedFields = [
+      { name: "Total", value: bookings.length.toString(), inline: true },
+      { name: "Enviados", value: sentCount.toString(), inline: true },
+      { name: "Falhas", value: (bookings.length - sentCount).toString(), inline: true }
+    ];
+
+    if (failureDetails.length > 0) {
+      // Limita a 5 falhas no embed para não estourar o limite do Discord
+      const detailsText = failureDetails.slice(0, 5).join("\n");
+      embedFields.push({
+        name: "Detalhes das Falhas",
+        value: detailsText.slice(0, 1024),
+        inline: false
+      });
+    }
+
     await sendDiscordNotification(DISCORD_LOGS_WEBHOOK_URL, createReminderLogEmbed(
-      `✅ Lembretes Finalizados - ${triggerTime}h`,
-      5763719, // Green
-      [
-        { name: "Total", value: bookings.length.toString(), inline: true },
-        { name: "Enviados", value: sentCount.toString(), inline: true },
-        { name: "Falhas/Ignorados", value: (bookings.length - sentCount).toString(), inline: true }
-      ]
+      `${sentCount === bookings.length ? "✅" : "⚠️"} Lembretes Finalizados - ${triggerTime}h`,
+      embedColor,
+      embedFields
     ));
   } catch (error) {
     console.error(`[CRON] Erro ao enviar lembretes de agendamento (trigger: ${triggerTime}):`, error.message);
