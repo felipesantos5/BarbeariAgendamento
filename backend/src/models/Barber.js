@@ -33,6 +33,10 @@ const BarberSchema = new Schema({
       },
     ],
   },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 BarberSchema.index({ barbershop: 1 });

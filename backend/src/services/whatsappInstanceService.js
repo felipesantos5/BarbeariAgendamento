@@ -76,8 +76,6 @@ export async function createInstance(barbershopId) {
       syncFullHistory: false,
     };
 
-    console.log(`[WhatsApp] Enviando payload de criação para ${instanceName}:`, JSON.stringify(payload, null, 2));
-
     const createResponse = await api.post("/instance/create", payload);
 
     // Verifica se o QR code veio na resposta de criação
@@ -123,8 +121,6 @@ export async function createInstance(barbershopId) {
         pairingCode = connectResult.pairingCode;
       }
     }
-
-    console.log(`[WhatsApp] Instância criada com sucesso: ${instanceName}`);
 
     return {
       instanceName,

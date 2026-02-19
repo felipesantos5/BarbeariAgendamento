@@ -210,11 +210,20 @@ router.post("/:barberId/resend-setup-email", protectAdmin, checkAccountStatus, r
 router.get("/", async (req, res) => {
   try {
     const barbershopId = new mongoose.Types.ObjectId(req.params.barbershopId);
+    const { all } = req.query;
+
+    const matchQuery = { barbershop: barbershopId };
+    
+    // Se não for solicitado 'todos', filtra apenas os ativos
+    // Usamos $ne: false para incluir quem é true ou quem ainda não tem o campo (casos legados)
+    if (all !== "true") {
+      matchQuery.isActive = { $ne: false };
+    }
 
     const barbers = await Barber.aggregate([
-      // 1. Encontra todos os barbeiros que pertencem a esta barbearia
+      // 1. Encontra os barbeiros com base no filtro
       {
-        $match: { barbershop: barbershopId },
+        $match: matchQuery,
       },
       // 2. Faz o "JOIN" com a coleção 'adminusers'
       {
@@ -245,7 +254,8 @@ router.get("/", async (req, res) => {
         availability: barber.availability,
         break: barber.break,
         commission: barber.commission,
-        email: barber.loginInfo?.email
+        email: barber.loginInfo?.email,
+        isActive: barber.isActive !== false, // Default to true if undefined
       };
       
       return baseInfo;
@@ -293,8 +303,8 @@ router.get("/:barberId/free-slots", async (req, res) => {
     if (isNaN(serviceDuration) || serviceDuration <= 0) return res.status(400).json({ error: "Duração do serviço inválida." });
 
     const barber = await Barber.findById(barberId).lean();
-    if (!barber || barber.barbershop.toString() !== barbershopId) {
-      /* ... erro ... */
+    if (!barber || barber.barbershop.toString() !== barbershopId || barber.isActive === false) {
+      return res.status(404).json({ error: "Funcionário não encontrado ou inativo." });
     }
 
     // selectedDateInput é "YYYY-MM-DD"
@@ -547,18 +557,42 @@ router.put("/:barberId", protectAdmin, checkAccountStatus, async (req, res) => {
         return res.status(409).json({ error: "Este email já está em uso por outra conta." });
       }
 
-      // 4b. Atualiza o email na conta de login (AdminUser)
-      const updatedAdminUser = await AdminUser.findOneAndUpdate(
-        { barberProfile: barberId, barbershop: barbershopId },
-        { $set: { email: email } },
-        { new: true }
-      );
+      // 4b. Atualiza o email na conta de login (AdminUser) ou cria uma nova se não existir
+      const adminUser = await AdminUser.findOne({
+        barberProfile: barberId,
+        barbershop: barbershopId,
+      });
 
-      if (updatedAdminUser) {
-        updatedEmail = updatedAdminUser.email;
+      if (adminUser) {
+        adminUser.email = email;
+        await adminUser.save();
+        updatedEmail = adminUser.email;
       } else {
-        // Isso é um estado inesperado (Barbeiro existe mas AdminUser não)
-        console.warn(`[PUT /barberId] Barbeiro ${barberId} encontrado, mas AdminUser associado não.`);
+        // Se não existir um AdminUser para este barbeiro, criamos um (fluxo de adicionar email a barbeiro existente)
+        const setupToken = crypto.randomBytes(32).toString("hex");
+        const hashedToken = crypto.createHash("sha256").update(setupToken).digest("hex");
+        const tokenExpiration = Date.now() + 72 * 60 * 60 * 1000;
+
+        await AdminUser.create({
+          email: email,
+          role: "barber",
+          barbershop: barbershopId,
+          barberProfile: barberId,
+          status: "pending",
+          accountSetupToken: hashedToken,
+          accountSetupTokenExpires: new Date(tokenExpiration),
+        });
+
+        // Envia o email de configuração para o novo usuário
+        try {
+          const barbershop = await Barbershop.findById(barbershopId).select("name");
+          const barbershopName = barbershop?.name || "nossa barbearia";
+          await sendAccountSetupEmail(email, setupToken, updatedBarber.name, barbershopName);
+          console.log(`[PUT /barberId] Nova conta de login criada e email enviado para ${email}`);
+        } catch (emailError) {
+          console.error("⚠️ [PUT /barberId] Erro ao enviar email para nova conta:", emailError);
+        }
+        updatedEmail = email;
       }
     }
 

@@ -41,6 +41,7 @@ const barberBaseSchema = z.object({
     .optional(),
   commission: z.number().optional(),
   productCommission: z.number().optional(),
+  isActive: z.boolean().optional(),
 });
 
 // barberCreationSchema agora herda o 'email' opcional do barberBaseSchema
