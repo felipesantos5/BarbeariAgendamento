@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Edit2, Trash2, UserCircle, Copy } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import apiClient from "@/services/api";
 import { API_BASE_URL } from "@/config/BackendUrl";
 import { ImageUploader } from "../components/ImageUploader";
@@ -55,6 +56,7 @@ interface Barber {
   break?: Break; // Adicionar campo break
   email?: string;
   commission?: number;
+  isActive?: boolean;
 }
 
 type BarberFormData = {
@@ -65,6 +67,7 @@ type BarberFormData = {
   email?: string; // Agora é opcional - o dono pode criar barbeiro sem conta de login
   password?: string;
   commission?: number;
+  isActive?: boolean;
 };
 
 const daysOfWeek = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -107,7 +110,7 @@ export function BarberPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await apiClient.get(`${API_BASE_URL}/barbershops/${barbershopId}/barbers`);
+      const response = await apiClient.get(`${API_BASE_URL}/barbershops/${barbershopId}/barbers?all=true`);
       setBarbers(response.data);
     } catch (err) {
       console.error("Erro ao buscar funcionários:", err);
@@ -344,6 +347,24 @@ export function BarberPage() {
     });
   };
 
+  const handleToggleActive = async (barberId: string, currentStatus: boolean) => {
+    if (!barbershopId) return;
+
+    try {
+      await apiClient.put(`${API_BASE_URL}/barbershops/${barbershopId}/barbers/${barberId}`, {
+        isActive: !currentStatus
+      });
+
+      // Atualiza o estado localmente para refletir a mudança imediatamente
+      setBarbers(prev => prev.map(b => b._id === barberId ? { ...b, isActive: !currentStatus } : b));
+
+      toast.success(`Funcionário ${!currentStatus ? 'ativado' : 'desativado'} com sucesso!`);
+    } catch (err: any) {
+      console.error("Erro ao alterar status do funcionário:", err);
+      toast.error("Falha ao alterar o status.");
+    }
+  };
+
   const closeDialogAndReset = () => {
     setIsDialogOpen(false);
     setSetupLink("");
@@ -373,6 +394,7 @@ export function BarberPage() {
               <TableHead className="text-left">Disponibilidade</TableHead>
               <TableHead className="text-left">Pausa</TableHead>
               <TableHead className="text-center">Comissão</TableHead>
+              <TableHead className="text-center">Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -409,6 +431,17 @@ export function BarberPage() {
                 </TableCell>
                 <TableCell className="text-xs font-medium text-blue-600 text-center">
                   {barber.commission || 0}%
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      checked={barber.isActive !== false}
+                      onCheckedChange={() => handleToggleActive(barber._id, barber.isActive !== false)}
+                    />
+                    <span className={`text-[10px] font-bold uppercase ${barber.isActive !== false ? "text-green-600" : "text-gray-400"}`}>
+                      {barber.isActive !== false ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button
