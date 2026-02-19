@@ -557,14 +557,35 @@ router.put("/:barberId", protectAdmin, checkAccountStatus, async (req, res) => {
       if (updatedAdminUser) {
         updatedEmail = updatedAdminUser.email;
       } else {
-        // Isso é um estado inesperado (Barbeiro existe mas AdminUser não)
-        console.warn(`[PUT /barberId] Barbeiro ${barberId} encontrado, mas AdminUser associado não.`);
+        // Se não existir um AdminUser para este barbeiro, criamos um (fluxo de adicionar email a barbeiro existente)
+        const setupToken = crypto.randomBytes(32).toString("hex");
+        const hashedToken = crypto.createHash("sha256").update(setupToken).digest("hex");
+        const tokenExpiration = Date.now() + 72 * 60 * 60 * 1000;
+
+        await AdminUser.create({
+          email: email,
+          role: "barber",
+          barbershop: barbershopId,
+          barberProfile: barberId,
+          status: "pending",
+          accountSetupToken: hashedToken,
+          accountSetupTokenExpires: new Date(tokenExpiration),
+        });
+
+        // Envia o email de configuração para o novo usuário
+        try {
+          const barbershop = await Barbershop.findById(barbershopId).select("name");
+          const barbershopName = barbershop?.name || "nossa barbearia";
+          await sendAccountSetupEmail(email, setupToken, updatedBarber.name, barbershopName);
+        } catch (emailError) {
+          console.error("⚠️ [PUT /barberId] Erro ao enviar email para nova conta:", emailError);
+        }
+        updatedEmail = email;
       }
     }
 
     // 5. Busca o email final (seja o novo ou o antigo) para retornar ao frontend
     if (!updatedEmail) {
-      const adminUser = await AdminUser.findOne({ barberProfile: barberId }).select("email").lean();
       updatedEmail = adminUser ? adminUser.email : undefined;
     }
 
