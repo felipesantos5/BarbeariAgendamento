@@ -184,7 +184,6 @@ export const sendAccountSetupEmail = async (to, token, barberName, barbershopNam
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`✅ Email de configuração de conta enviado para ${to}`);
   } catch (error) {
     console.error("❌ Erro ao enviar e-mail de configuração de conta:", error);
     throw new Error("Falha ao enviar e-mail de convite. Por favor, tente novamente.");
