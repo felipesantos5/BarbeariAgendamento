@@ -10,6 +10,8 @@ import Subscription from "../../models/Subscription.js";
 import OperationalCost from "../../models/OperationalCost.js";
 import { startOfMonth, endOfMonth, startOfDay, endOfDay, parseISO, isValid } from "date-fns";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import Barbershop from "../../models/Barbershop.js";
+import { calculateEstimatedTax } from "../../config/taxConfig.js";
 
 const router = express.Router({ mergeParams: true });
 
@@ -26,6 +28,11 @@ router.get("/", async (req, res) => {
 
     if (!mongoose.Types.ObjectId.isValid(barbershopId)) {
       return res.status(400).json({ error: "ID da barbearia inválido." });
+    }
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
     }
 
     // --- 1. Tratamento de Datas ---
@@ -617,7 +624,20 @@ router.get("/", async (req, res) => {
     const totalPurchaseCost = stockEntryData.totalPurchaseCost; // ✅ Nova constante para clareza
     const totalOperationalCosts = operationalCostsData.totalOperationalCosts;
     const totalExpenses = totalPurchaseCost + totalOperationalCosts; // ✅ AGORA USA A COMPRA DE PRODUTOS
-    const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalExpenses;
+    
+    // Cálculo de Impostos (considerando regime e meses ativos)
+    const activeMonthsCount = Math.max(1, (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1);
+    const taxableRevenue = Math.max(0, totalGrossRevenue - totalCommissionsPaid);
+    const taxInfo = barbershop.taxInfo || {};
+    const estimatedTax = calculateEstimatedTax(
+      taxInfo.regime, 
+      taxableRevenue, 
+      taxInfo.regime === "Simples Nacional" ? taxInfo.simplesNacionalRate : null,
+      activeMonthsCount
+    );
+
+    const totalTaxes = estimatedTax || 0;
+    const totalNetRevenue = totalGrossRevenue - totalCommissionsPaid - totalExpenses - totalTaxes;
 
     // --- 5.1 Estatísticas de Planos ---
     const activePlansCount = planStatsData.activePlans[0]?.count || 0;
@@ -661,6 +681,8 @@ router.get("/", async (req, res) => {
         totalExpenses: totalExpenses,
         totalCostOfGoods: totalPurchaseCost,
         totalOperationalCosts: totalOperationalCosts,
+
+        totalTaxes: totalTaxes,
 
         // Faturamento Líquido
         totalNetRevenue: totalNetRevenue,

@@ -4,9 +4,9 @@
  */
 
 export const TAX_RATES = {
-  // MEI: Valor fixo mensal baseado no salário mínimo de 2024 (R$ 1.412,00)
-  // 5% INSS + ISS (R$ 5,00). Total aprox. R$ 75,60
-  MEI_FIXED_VALUE: 75.60,
+  // MEI: Valor fixo mensal baseado no salário mínimo de 2026 (R$ 1.621,00)
+  // 5% INSS (R$ 81,05) + ISS (R$ 5,00). Total: R$ 86,05
+  MEI_FIXED_VALUE: 86.05,
 
   // Simples Nacional: Alíquotas base por anexo
   // Barbearias geralmente se enquadram no Anexo III (Serviços) 
