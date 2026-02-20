@@ -93,6 +93,7 @@ interface FinancialOverview {
   totalExpenses: number;
   totalCostOfGoods: number;
   totalOperationalCosts: number;
+  totalTaxes?: number;
   totalNetRevenue: number;
 }
 
@@ -420,7 +421,7 @@ export default function DashboardMetricsPage() {
           ) : data ? (
             <>
               {/* Card de Resumo Financeiro content */}
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
+              <div className={`grid gap-4 md:grid-cols-2 mb-6 ${data.financialOverview.totalTaxes && data.financialOverview.totalTaxes > 0 ? 'lg:grid-cols-3 xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
                 <MetricCard
                   title="Faturamento Bruto"
                   value={PriceFormater(data.financialOverview.totalGrossRevenue)}
@@ -445,11 +446,21 @@ export default function DashboardMetricsPage() {
                   valueClassName="text-orange-600"
                   className="justify-around"
                 />
+                {data.financialOverview.totalTaxes && data.financialOverview.totalTaxes > 0 ? (
+                  <MetricCard
+                    title="Impostos"
+                    value={PriceFormater(data.financialOverview.totalTaxes)}
+                    icon={ClipboardList}
+                    description="Estimativa no regime fiscal"
+                    valueClassName="text-red-500"
+                    className="justify-around"
+                  />
+                ) : null}
                 <MetricCard
                   title="Faturamento Líquido"
                   value={PriceFormater(data.financialOverview.totalNetRevenue)}
                   icon={DollarSign}
-                  description="Bruto - Comissões - Despesas"
+                  description={`Bruto - Comissões - Gastos${data.financialOverview.totalTaxes && data.financialOverview.totalTaxes > 0 ? ' - Impostos' : ''}`}
                   valueClassName="text-green-600"
                   className="bg-green-50 border-green-200 justify-around"
                 />
