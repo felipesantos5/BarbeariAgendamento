@@ -3,10 +3,12 @@ import Customer from "../../models/Customer.js";
 import Plan from "../../models/Plan.js";
 import Booking from "../../models/Booking.js";
 import Subscription from "../../models/Subscription.js";
+import Barbershop from "../../models/Barbershop.js";
 import { protectAdmin, requireRole } from "../../middleware/authAdminMiddleware.js";
 import { addDays } from "date-fns";
 import mongoose from "mongoose";
 import { z } from "zod";
+import { sendWhatsAppMessage } from "../../services/whatsappMessageService.js";
 
 const router = express.Router({ mergeParams: true });
 const customerCreationSchema = z.object({
@@ -244,6 +246,144 @@ router.get("/", protectAdmin, requireRole("admin", "barber"), async (req, res) =
     });
   }
 });
+
+// ✅ ROTA DE ENVIO DE WINBACK (Lembrete WhatsApp)
+// POST /api/barbershops/:barbershopId/admin/customers/send-winback-reminders
+router.post("/send-winback-reminders", protectAdmin, requireRole("admin"), async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+    const barbershopMongoId = new mongoose.Types.ObjectId(barbershopId);
+
+    const barbershop = await Barbershop.findById(barbershopId).select("name whatsappConfig slug");
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada." });
+    }
+
+    if (!barbershop.whatsappConfig?.enabled) {
+      return res.status(400).json({ error: "O WhatsApp não está configurado ou ativado para esta barbearia." });
+    }
+
+    // Calcular data limite (40 dias atrás)
+    const fortyDaysAgo = new Date();
+    fortyDaysAgo.setDate(fortyDaysAgo.getDate() - 40);
+
+    // Passo 1: Encontrar clientes com agendamentos nesta barbearia
+    const customersPipeline = [
+      { $lookup: { from: "bookings", localField: "_id", foreignField: "customer", as: "allBookings" } },
+      {
+        $project: {
+          name: 1,
+          phone: 1,
+          returnReminders: 1,
+          shopBookings: {
+            $filter: {
+              input: "$allBookings",
+              as: "booking",
+              cond: { $eq: ["$$booking.barbershop", barbershopMongoId] },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          "shopBookings.0": { $exists: true }, // Tem pelo menos um agendamento nesta loja
+        },
+      },
+    ];
+
+    const eligibleCustomers = await Customer.aggregate(customersPipeline);
+
+    let sentCount = 0;
+    let skippedCount = 0;
+    const tasks = [];
+
+    // Mensagem Padrão
+    const getMessageTemplate = (name, barbershopName, slug) => 
+      `Olá ${name.split(" ")[0]}, tudo bem? Aqui é do(a) *${barbershopName}*! 👋\n\n` +
+      `Notamos que faz um tempo desde sua última visita (mais de 40 dias). Que tal dar um tapa no visual essa semana? ✂️\n\n` +
+      `Acesse nosso link de agendamento e garanta seu horário! Se precisar de algo, só responder essa mensagem. Aguardamos você! 🔥\n\n` +
+      `📅 Agende aqui: https://www.barbeariagendamento.com.br/${slug}`;
+
+    for (const data of eligibleCustomers) {
+      const bookingsSorted = data.shopBookings.sort((a, b) => new Date(b.time) - new Date(a.time));
+      const lastBooking = bookingsSorted[0];
+      const lastBookingDate = new Date(lastBooking.time);
+
+      // Regra 1: O último agendamento foi há mais de 40 dias?
+      if (lastBookingDate > fortyDaysAgo) {
+        skippedCount++;
+        continue;
+      }
+
+      // Regra 2: Impedir o envio se o cliente tiver um agendamento no futuro que ainda não aconteceu
+      const hasFutureBooking = bookingsSorted.some(b => new Date(b.time) > new Date() && b.status !== "canceled");
+      if (hasFutureBooking) {
+        skippedCount++;
+        continue;
+      }
+
+      // Regra 3: Limite de envios e intervalo inteligente.
+      // Contar apenas os lembretes enviados *depois* do último agendamento
+      const remindersSinceLastBooking = (data.returnReminders || [])
+        .filter(r => new Date(r.sentAt) > lastBookingDate)
+        .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt)); // Ordena do mais recente para o mais antigo
+
+      if (remindersSinceLastBooking.length >= 2) {
+        // Já enviou 2 lembretes desde o último agendamento (Limite máximo atingido)
+        skippedCount++;
+        continue;
+      }
+
+      if (remindersSinceLastBooking.length === 1) {
+        // Já enviou 1 lembrete. Só envia o 2º se o 1º foi enviado há mais de 40 dias.
+        const lastReminderDate = new Date(remindersSinceLastBooking[0].sentAt);
+        if (lastReminderDate > fortyDaysAgo) {
+          skippedCount++;
+          continue;
+        }
+      }
+
+      // O cliente é elegível!
+      sentCount++;
+      const message = getMessageTemplate(data.name, barbershop.name, barbershop.slug || "");
+      
+      // Delay aleatório entre 5 a 15 segundos entre as mensagens para evitar bloqueio
+      const delay = Math.floor(Math.random() * (15000 - 5000 + 1)) + 5000;
+      
+      tasks.push(async (index) => {
+        return new Promise((resolve) => {
+          setTimeout(async () => {
+            try {
+              await sendWhatsAppMessage(barbershopId, data.phone, message);
+              // Registrar o envio no histórico do cliente
+              await Customer.findByIdAndUpdate(data._id, {
+                $push: { returnReminders: { sentAt: new Date() } }
+              });
+              resolve(true);
+            } catch (err) {
+              console.error(`Falha ao enviar winback para ${data.phone}`, err);
+              resolve(false);
+            }
+          }, index * delay); // Multiplica o delay pelo índice para encadear
+        });
+      });
+    }
+
+    // Iniciar a execução das tarefas assíncronas em Background (não travar o res.json)
+    Promise.all(tasks.map((task, index) => task(index))).catch(err => console.error("Erro na fila de Winback:", err));
+
+    res.status(200).json({
+      message: sentCount > 0 ? "Fila processada. As mensagens estão sendo enviadas gradualmente." : "Nenhum cliente elegível no momento.",
+      sent: sentCount,
+      skipped: skippedCount
+    });
+
+  } catch (error) {
+    console.error("Erro ao processar envios de winback:", error);
+    res.status(500).json({ error: "Erro interno no servidor." });
+  }
+});
+
 
 // ✅ ROTA PARA CRIAR UM NOVO CLIENTE (AVULSO)
 // POST /api/barbershops/:barbershopId/admin/customers

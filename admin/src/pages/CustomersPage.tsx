@@ -38,6 +38,7 @@ import {
   Clock,
   Mail,
   Info,
+  Send,
 } from "lucide-react";
 import { PhoneFormat } from "@/helper/phoneFormater";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -145,6 +146,11 @@ export function CustomersPage() {
     name: "",
     phone: "",
   });
+
+  // Novos estados para Envio de Lembretes (Winback)
+  const [isSendWinbackModalOpen, setIsSendWinbackModalOpen] = useState(false);
+  const [isSendingWinbacks, setIsSendingWinbacks] = useState(false);
+  const [winbackResult, setWinbackResult] = useState<{ sent: number; skipped: number } | null>(null);
 
   // Estados para Remover Plano
   const [isRemovePlanModalOpen, setIsRemovePlanModalOpen] = useState(false);
@@ -409,6 +415,21 @@ export function CustomersPage() {
     }
   };
 
+  const handleSendWinbackReminders = async () => {
+    setIsSendingWinbacks(true);
+    setWinbackResult(null);
+    try {
+      const response = await apiClient.post(`${API_BASE_URL}/api/barbershops/${barbershopId}/admin/customers/send-winback-reminders`);
+      setWinbackResult(response.data);
+      toast.success(response.data.message || "Processo de envio finalizado!");
+    } catch (error: any) {
+      console.error("Erro ao enviar lembretes:", error);
+      toast.error(error.response?.data?.error || "Erro ao iniciar o envio de lembretes.");
+    } finally {
+      setIsSendingWinbacks(false);
+    }
+  };
+
   // Funções auxiliares (Formatadores)
   const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "N/A";
@@ -529,10 +550,16 @@ export function CustomersPage() {
                 {totalCustomers} cliente{totalCustomers !== 1 ? "s" : ""} encontrado{totalCustomers !== 1 ? "s" : ""}
               </CardDescription>
             </div>
-            <Button onClick={handleOpenCreateModal}>
-              <Plus className="h-4 w-4 mr-2" />
-              Criar Cliente
-            </Button>
+            <div className="flex flex-col xs:flex-row gap-2">
+              <Button onClick={() => setIsSendWinbackModalOpen(true)} variant="outline" className="border-green-600 text-green-600 hover:bg-green-50">
+                <Send className="h-4 w-4 mr-2" />
+                Lembrete WhatsApp
+              </Button>
+              <Button onClick={handleOpenCreateModal}>
+                <Plus className="h-4 w-4 mr-2" />
+                Criar Cliente
+              </Button>
+            </div>
           </div>
 
           {/* Filtros */}
@@ -1367,6 +1394,62 @@ export function CustomersPage() {
               </Button>
             </DialogClose>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Modal de confirmação Winback (Lembrete WhatsApp) */}
+      <Dialog open={isSendWinbackModalOpen} onOpenChange={(open) => !isSendingWinbacks && setIsSendWinbackModalOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar Lembretes no WhatsApp</DialogTitle>
+            <DialogDescription>
+              Esta ação enviará uma mensagem de recuperação (Winback) para todos os clientes desta barbearia que não fazem um agendamento há mais de 40 dias.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!winbackResult ? (
+            <div className="space-y-4 pt-4">
+              <div className="bg-amber-50 text-amber-800 p-3 rounded-md text-sm">
+                <p><strong>Atenção:</strong></p>
+                <ul className="list-disc pl-5 mt-1">
+                  <li>O envio será feito com um intervalo de segurança entre as mensagens para evitar bloqueios por SPAM.</li>
+                  <li>O sistema limitará o envio a no máximo 2 avisos por cliente desde o seu último agendamento.</li>
+                </ul>
+              </div>
+
+              <DialogFooter className="mt-6">
+                <Button variant="outline" onClick={() => setIsSendWinbackModalOpen(false)} disabled={isSendingWinbacks}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSendWinbackReminders} disabled={isSendingWinbacks} className="bg-green-600 hover:bg-green-700 text-white">
+                  {isSendingWinbacks ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Enviando Mensagens...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Iniciar Envio
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-4 text-center">
+              <div className="h-12 w-12 rounded-full bg-green-100 items-center justify-center flex mx-auto mb-4">
+                <Send className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900">Processo concluído!</h3>
+              <p className="text-sm text-gray-500">
+                <strong className="text-green-600">{winbackResult.sent}</strong> mensagens foram colocadas na fila de envio com sucesso.<br />
+                <strong className="text-amber-600">{winbackResult.skipped}</strong> clientes foram ignorados (já receberam o limite ou não são elegíveis).
+              </p>
+              <DialogFooter className="mt-6 justify-center">
+                <Button onClick={() => setIsSendWinbackModalOpen(false)}>Fechar Janela</Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
