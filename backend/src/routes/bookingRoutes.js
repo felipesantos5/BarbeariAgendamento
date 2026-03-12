@@ -20,7 +20,7 @@ import { ptBR } from "date-fns/locale";
 import { toZonedTime } from "date-fns-tz";
 import { appointmentLimiter } from "../middleware/rateLimiting.js";
 import { addClient, removeClient, sendEventToBarbershop, getConnectionStats } from "../services/sseService.js";
-import { MercadoPagoConfig, Preference } from "mercadopago";
+import { MercadoPagoConfig, Preference, PaymentRefund } from "mercadopago";
 import { cacheService } from "../config/redis.js";
 
 const router = express.Router({ mergeParams: true });
@@ -428,11 +428,47 @@ router.put(
         });
       }
 
-      // 3. Regra de negócio: não permitir cancelamento de agendamentos que já passaram
-      if (new Date(booking.time) < new Date()) {
+      // 3. Regra de negócio: impedir cancelamento se faltar menos de 30 minutos
+      const bookingTime = new Date(booking.time);
+      const now = new Date();
+      const differenceInMinutes = (bookingTime.getTime() - now.getTime()) / (1000 * 60);
+
+      if (differenceInMinutes < 0) {
         return res.status(400).json({
           error: "Não é possível cancelar um agendamento que já ocorreu.",
         });
+      }
+
+      if (differenceInMinutes < 30) {
+        return res.status(400).json({
+          error: "Cancelamentos só são permitidos com no mínimo 30 minutos de antecedência.",
+        });
+      }
+
+      // 4. Lógica de Estorno (Refund) no Mercado Pago
+      if (booking.paymentStatus === "approved" && booking.paymentId) {
+        try {
+          // Precisamos do Access Token da barbearia para o estorno cair na conta certa
+          const barbershop = await Barbershop.findById(booking.barbershop);
+          if (barbershop && barbershop.mercadoPagoAccessToken) {
+            const client = new MercadoPagoConfig({
+              accessToken: barbershop.mercadoPagoAccessToken,
+            });
+
+            const refund = new PaymentRefund(client);
+            // Executa o estorno total
+            await refund.create({
+              payment_id: booking.paymentId,
+            });
+
+            console.log(`[Refund] Estorno realizado com sucesso para o agendamento ${bookingId} (Pagamento: ${booking.paymentId})`);
+            booking.paymentStatus = "refunded";
+          }
+        } catch (refundError) {
+          console.error("[Refund] Erro ao processar estorno no Mercado Pago:", refundError.message);
+          // Opcional: Você pode decidir se bloqueia o cancelamento caso o estorno falhe
+          // Por enquanto, vamos apenas logar o erro para não travar o fluxo do cliente
+        }
       }
 
       // 4. Devolve créditos se o agendamento usou crédito de plano
@@ -455,7 +491,30 @@ router.put(
       // Invalidate availability cache
       await invalidateAvailabilityCache(booking.barber.toString());
 
-      // Você pode adicionar uma notificação de WhatsApp para o admin/barbeiro aqui se desejar
+      // 6. Enviar notificação de WhatsApp para o cliente
+      try {
+        const barbershop = await Barbershop.findById(booking.barbershop);
+        if (barbershop) {
+          const bookingDate = new Date(booking.time);
+          const formattedDate = new Intl.DateTimeFormat("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+          }).format(bookingDate);
+          const formattedTime = new Intl.DateTimeFormat("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(bookingDate);
+
+          const customerToNotify = await Customer.findById(booking.customer);
+
+          if (customerToNotify) {
+            const message = `Olá, ${customerToNotify.name}!\n\nSeu agendamento para o dia ${formattedDate} às ${formattedTime} na *${barbershop.name}* foi cancelado com sucesso.\n\nFicamos à disposição para remarcações futuras!`;
+            sendWhatsAppMessage(booking.barbershop.toString(), customerToNotify.phone, message);
+          }
+        }
+      } catch (notifyError) {
+        console.error("Erro ao enviar WhatsApp de cancelamento pelo cliente:", notifyError);
+      }
 
       res.status(200).json({
         success: true,
