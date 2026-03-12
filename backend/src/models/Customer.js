@@ -71,6 +71,13 @@ const customerSchema = new mongoose.Schema(
           type: Date,
           required: true,
         },
+        barbershop: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Barbershop",
+        },
+        message: {
+          type: String,
+        },
       },
     ],
   },

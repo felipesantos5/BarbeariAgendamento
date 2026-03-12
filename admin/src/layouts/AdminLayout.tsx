@@ -32,8 +32,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SetupWizard } from "@/components/SetupWizard";
@@ -66,7 +64,6 @@ export function AdminLayout() {
   const [error, setError] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showExpiredModal, setShowExpiredModal] = useState(false);
-  const [barbersCount, setBarbersCount] = useState<number>(0);
   const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
@@ -104,7 +101,6 @@ export function AdminLayout() {
             ]);
             const barbersLen = barbersResponse.data?.length || 0;
             const servicesLen = servicesResponse.data?.length || 0;
-            setBarbersCount(barbersLen);
 
 
             // Verifica se precisa do wizard de configuração (admin only)
@@ -113,7 +109,6 @@ export function AdminLayout() {
             }
           } catch (barbersErr) {
             console.error("Erro ao buscar barbeiros/serviços:", barbersErr);
-            setBarbersCount(0);
           }
         } else {
           setError("Barbearia não encontrada.");
@@ -366,14 +361,20 @@ export function AdminLayout() {
           {/* Banner de Conta Inativa */}
           {barbershop.accountStatus === "inactive" && (
             <div className="mt-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-              <div className="flex flex-col gap-1 text-center">
+              <div className="flex flex-col gap-1.5 text-center">
                 <span className="text-xs font-bold text-red-400">CONTA DESATIVADA</span>
                 <span className="text-[10px] text-red-300">
-                  Você pode visualizar seus dados.
+                  Modo somente leitura.
                 </span>
-                <span className="text-[10px] text-red-200 mt-1">
-                  Entre em contato para reativar.
-                </span>
+                <a href="/assinar">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full mt-1 bg-rose-600 hover:bg-rose-700 text-white text-xs h-7"
+                  >
+                    Assinar Plano
+                  </Button>
+                </a>
               </div>
             </div>
           )}
@@ -431,73 +432,89 @@ export function AdminLayout() {
 
   return (
     <BarbershopAdminContext.Provider value={barbershop}>
-      {/* Modal de Conta Expirada */}
+      {/* Modal de Conta Inativa / Plano Expirado */}
       <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
-        <DialogContent className="sm:max-w-[500px] bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-400">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-amber-200 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-amber-700" />
-              </div>
-              <DialogTitle className="text-2xl text-amber-900">Teste Grátis Expirado</DialogTitle>
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-0">
+          {/* Header com gradiente */}
+          <div className="bg-gradient-to-br from-rose-600 to-rose-700 p-6 text-white text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/20 mb-3">
+              <AlertTriangle className="h-7 w-7 text-white" />
             </div>
-            <DialogDescription className="text-amber-800 text-base">
-              Seu período de teste de 7 dias chegou ao fim. Você pode continuar visualizando seus dados, mas não
-              poderá mais criar ou editar informações.
+            <DialogTitle className="text-xl font-bold text-white">
+              {barbershop.isTrial ? "Teste Grátis Expirado" : "Conta Desativada"}
+            </DialogTitle>
+            <DialogDescription className="text-rose-100 mt-1">
+              {barbershop.isTrial
+                ? "Seu período de teste chegou ao fim."
+                : "Sua conta está inativa."}
+              {" "}Assine para continuar usando todas as funcionalidades.
             </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 my-4">
-            <div className="bg-white p-4 rounded-lg border border-amber-200">
-              <h3 className="font-semibold text-amber-900 mb-2">O que você ainda pode fazer:</h3>
-              <ul className="space-y-1 text-sm text-gray-700">
-                <li className="flex items-center gap-2">
-                  <span className="text-green-600">✓</span> Visualizar todos os seus dados
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-green-600">✓</span> Consultar histórico de agendamentos
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-green-600">✓</span> Ver relatórios e métricas
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-amber-200 p-4 rounded-lg border border-amber-300">
-              <p className="text-sm text-amber-900 font-medium">
-                Para continuar recebendo agendamentos e gerenciando sua barbearia, assine um plano agora!
-              </p>
-            </div>
           </div>
 
-          <DialogFooter className="flex-col sm:flex-col gap-2">
-            <a
-              href="https://wa.me/5548996994257?text=Olá,%20gostaria%20de%20contratar%20o%20sistema%20de%20agendamento"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full"
-            >
-              <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Falar com Atendente no WhatsApp
-              </Button>
-            </a>
+          <div className="p-6 space-y-4">
+            {/* Card do plano */}
+            <div className="rounded-xl border-2 border-rose-200 bg-rose-50/50 p-5 text-center">
+              <p className="text-sm font-medium text-gray-500 mb-1">Plano Profissional</p>
+              <div className="flex items-baseline justify-center gap-1">
+                <span className="text-sm text-gray-500">R$</span>
+                <span className="text-4xl font-extrabold text-gray-900">99</span>
+                <span className="text-lg font-bold text-gray-900">,90</span>
+                <span className="text-gray-500">/mês</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Acesso completo a todas as funcionalidades</p>
+            </div>
 
-            <a
-              href={
-                barbersCount >= 4
-                  ? "https://compre.barbeariagendamento.com.br/plano-plus" // Link X - 4 ou mais barbeiros
-                  : "https://compre.barbeariagendamento.com.br/plano-basico" // Link Y - 3 ou menos barbeiros
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full"
+            {/* O que está incluso */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-700">Tudo incluso:</p>
+              <div className="grid grid-cols-2 gap-1.5 text-sm text-gray-600">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-green-500 text-xs">&#10003;</span> Agendamento online
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-green-500 text-xs">&#10003;</span> Lembretes WhatsApp
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-green-500 text-xs">&#10003;</span> Painel de métricas
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-green-500 text-xs">&#10003;</span> Gestão completa
+                </div>
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="space-y-2 pt-2">
+              <a href="/assinar" className="block">
+                <Button className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white font-semibold">
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Assinar Agora
+                </Button>
+              </a>
+
+              <a
+                href="https://wa.me/5548996994257?text=Olá,%20gostaria%20de%20contratar%20o%20sistema%20de%20agendamento"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <Button variant="outline" className="w-full h-11">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Falar com Atendente
+                </Button>
+              </a>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowExpiredModal(false);
+                sessionStorage.setItem(`expiredModal_${barbershop._id}`, "true");
+              }}
+              className="w-full text-xs text-gray-400 hover:text-gray-600 text-center pt-1"
             >
-              <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-                Comprar Plano Agora
-              </Button>
-            </a>
-          </DialogFooter>
+              Continuar apenas visualizando
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 

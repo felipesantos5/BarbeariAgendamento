@@ -64,11 +64,22 @@ const BarbershopSchema = new mongoose.Schema(
         trim: true,
         default: "1 Corte Grátis",
       },
-      returnReminder: {
-        enabled: {
-          type: Boolean,
-          default: false,
-        },
+    },
+    returnReminder: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      inactiveDays: {
+        type: Number,
+        default: 30,
+        min: 14,
+        max: 90,
+      },
+      customMessage: {
+        type: String,
+        trim: true,
+        default: "",
       },
     },
     // Trial account fields

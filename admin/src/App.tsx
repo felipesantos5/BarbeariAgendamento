@@ -26,6 +26,7 @@ import { RecurrencePage } from "./pages/RecurrencePage.tsx";
 import { CheckoutConfigPage } from "./pages/CheckoutConfigPage.tsx";
 import { OperationalCostsPage } from "./pages/OperationalCostsPage.tsx";
 import { WhatsAppConfigPage } from "./pages/WhatsAppConfigPage";
+import { CheckoutPage } from "./pages/CheckoutPage";
 import { SuperAdminLoginPage } from "./pages/superadmin/SuperAdminLoginPage";
 import { SuperAdminDashboardPage } from "./pages/superadmin/SuperAdminDashboardPage";
 import { SuperAdminBillingPage } from "./pages/superadmin/SuperAdminBillingPage";
@@ -51,6 +52,7 @@ export default function App() {
         {/* Regular Admin Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/criar-conta" element={<TrialSignupPage />} />
+        <Route path="/assinar" element={<CheckoutPage />} />
         <Route path="/conta-expirada" element={<AccountExpiredPage />} />
         <Route path="/configurar-senha/:token" element={<SetPasswordPage />} />
         <Route path="/resetar-senha/:token" element={<ResetPasswordPage />} />

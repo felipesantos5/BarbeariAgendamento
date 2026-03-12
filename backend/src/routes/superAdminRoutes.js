@@ -59,13 +59,20 @@ router.post("/barbershops", async (req, res) => {
     delete barbershopResponse.mercadoPagoWebhookSecret;
 
     // 5. Cria o usuário Admin (dono)
-    const newAdmin = await AdminUser.create({
+    const adminData = {
       email: adminEmail,
-      password: adminPassword, // A senha será hasheada pelo hook 'pre-save' do modelo
-      barbershop: newBarbershop._id, // Associa o admin à barbearia
-      role: "admin", // Define a permissão
-      status: "active", // Já define como ativo, pois a senha foi criada
-    });
+      barbershop: newBarbershop._id,
+      role: "admin",
+    };
+
+    if (adminPassword) {
+      adminData.password = adminPassword; // A senha será hasheada pelo hook 'pre-save' do modelo
+      adminData.status = "active";
+    } else {
+      adminData.status = "pending"; // Sem senha — usuário criará na primeira vez que logar
+    }
+
+    const newAdmin = await AdminUser.create(adminData);
 
     // 6. Responde com sucesso (omitindo dados sensíveis)
     res.status(201).json({

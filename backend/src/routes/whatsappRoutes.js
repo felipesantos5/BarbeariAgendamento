@@ -1,5 +1,6 @@
 // src/routes/whatsappRoutes.js
 import express from "express";
+import mongoose from "mongoose";
 import {protectAdmin} from "../middleware/authAdminMiddleware.js";
 import {
   createInstance,
@@ -11,6 +12,7 @@ import {
   setWebhook,
 } from "../services/whatsappInstanceService.js";
 import Barbershop from "../models/Barbershop.js";
+import Customer from "../models/Customer.js";
 import { addClient, removeClient, sendEventToBarbershop } from "../services/sseService.js";
 
 const router = express.Router({ mergeParams: true });
@@ -481,6 +483,126 @@ router.put("/settings", protectAdmin, async (req, res) => {
       error: "Erro ao atualizar configurações",
       message: error.message,
     });
+  }
+});
+
+/**
+ * GET /api/barbershops/:barbershopId/whatsapp/return-reminder
+ * Retorna as configurações de lembrete de retorno da barbearia
+ */
+router.get("/return-reminder", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+
+    const barbershop = await Barbershop.findById(barbershopId).select("returnReminder");
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada" });
+    }
+
+    res.json({
+      enabled: barbershop.returnReminder?.enabled ?? false,
+      inactiveDays: barbershop.returnReminder?.inactiveDays ?? 30,
+      customMessage: barbershop.returnReminder?.customMessage ?? "",
+    });
+  } catch (error) {
+    console.error("[WhatsApp] Erro ao buscar configurações de lembrete de retorno:", error);
+    res.status(500).json({ error: "Erro ao buscar configurações", message: error.message });
+  }
+});
+
+/**
+ * PUT /api/barbershops/:barbershopId/whatsapp/return-reminder
+ * Salva as configurações de lembrete de retorno da barbearia
+ */
+router.put("/return-reminder", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+    const { enabled, inactiveDays, customMessage } = req.body;
+
+    const barbershop = await Barbershop.findById(barbershopId);
+    if (!barbershop) {
+      return res.status(404).json({ error: "Barbearia não encontrada" });
+    }
+
+    if (typeof enabled === "boolean") {
+      barbershop.set("returnReminder.enabled", enabled);
+    }
+
+    if (typeof inactiveDays === "number") {
+      const clamped = Math.min(90, Math.max(14, inactiveDays));
+      barbershop.set("returnReminder.inactiveDays", clamped);
+    }
+
+    if (typeof customMessage === "string") {
+      barbershop.set("returnReminder.customMessage", customMessage.trim());
+    }
+
+    await barbershop.save();
+
+    res.json({
+      message: "Configurações de lembrete de retorno salvas com sucesso",
+      enabled: barbershop.returnReminder.enabled,
+      inactiveDays: barbershop.returnReminder.inactiveDays,
+      customMessage: barbershop.returnReminder.customMessage,
+    });
+  } catch (error) {
+    console.error("[WhatsApp] Erro ao salvar configurações de lembrete de retorno:", error);
+    res.status(500).json({ error: "Erro ao salvar configurações", message: error.message });
+  }
+});
+
+/**
+ * GET /api/barbershops/:barbershopId/whatsapp/return-reminder/history
+ * Lista clientes que receberam lembretes de retorno desta barbearia
+ */
+router.get("/return-reminder/history", protectAdmin, async (req, res) => {
+  try {
+    const { barbershopId } = req.params;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const barbershopObjectId = new mongoose.Types.ObjectId(barbershopId);
+
+    // Busca clientes que têm lembretes desta barbearia
+    const [results, totalCount] = await Promise.all([
+      Customer.aggregate([
+        { $unwind: "$returnReminders" },
+        { $match: { "returnReminders.barbershop": barbershopObjectId } },
+        { $sort: { "returnReminders.sentAt": -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            phone: 1,
+            sentAt: "$returnReminders.sentAt",
+            message: "$returnReminders.message",
+          },
+        },
+      ]),
+      Customer.aggregate([
+        { $unwind: "$returnReminders" },
+        { $match: { "returnReminders.barbershop": barbershopObjectId } },
+        { $count: "total" },
+      ]),
+    ]);
+
+    const total = totalCount[0]?.total || 0;
+
+    res.json({
+      reminders: results,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("[WhatsApp] Erro ao buscar histórico de lembretes:", error);
+    res.status(500).json({ error: "Erro ao buscar histórico", message: error.message });
   }
 });
 

@@ -28,7 +28,6 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
     name: "",
     slug: "",
     adminEmail: "",
-    adminPassword: "",
     description: "",
     contact: "",
   });
@@ -44,7 +43,6 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
         name: formData.name,
         slug: formData.slug,
         adminEmail: formData.adminEmail,
-        adminPassword: formData.adminPassword,
         description: formData.description,
         contact: formData.contact,
         address: {
@@ -70,7 +68,6 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
         name: "",
         slug: "",
         adminEmail: "",
-        adminPassword: "",
         description: "",
         contact: "",
       });
@@ -168,37 +165,20 @@ export function CreateBarbershopModal({ open, onOpenChange, onSuccess }: CreateB
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">Credenciais Administrativas</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="adminEmail" className="text-sm font-medium text-white/90">
-                    Email de Acesso *
-                  </Label>
-                  <Input
-                    id="adminEmail"
-                    type="email"
-                    value={formData.adminEmail}
-                    onChange={(e) => handleChange("adminEmail", e.target.value)}
-                    placeholder="admin@unidade.com"
-                    required
-                    className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="adminPassword" className="text-sm font-medium text-white/90">
-                    Senha Provisória *
-                  </Label>
-                  <Input
-                    id="adminPassword"
-                    type="password"
-                    value={formData.adminPassword}
-                    onChange={(e) => handleChange("adminPassword", e.target.value)}
-                    placeholder="Mín. 6 caracteres"
-                    required
-                    minLength={6}
-                    className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="adminEmail" className="text-sm font-medium text-white/90">
+                  Email de Acesso *
+                </Label>
+                <Input
+                  id="adminEmail"
+                  type="email"
+                  value={formData.adminEmail}
+                  onChange={(e) => handleChange("adminEmail", e.target.value)}
+                  placeholder="admin@unidade.com"
+                  required
+                  className="bg-slate-800/40 border-slate-700/50 text-white placeholder:text-slate-500 focus:ring-blue-500/20 focus:border-blue-500/40 rounded-xl h-11 transition-all"
+                />
+                <p className="text-xs text-slate-400">O cliente criará sua própria senha no primeiro acesso.</p>
               </div>
             </div>
           </div>

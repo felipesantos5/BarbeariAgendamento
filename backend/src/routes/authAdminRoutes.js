@@ -25,8 +25,8 @@ const AUTH_COOKIE_NAME = "adminAuthToken";
 router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email e senha são obrigatórios." });
+    if (!email) {
+      return res.status(400).json({ error: "Email é obrigatório." });
     }
 
     const user = await AdminUser.findOne({ email }).populate("barbershop", "slug name");
@@ -36,27 +36,46 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
 
+    if (!user.barbershop) {
+      return res.status(500).json({ error: "Usuário não associado a uma barbearia." });
+    }
+
+    // Verificação 2: Usuário pendente (sem senha) — primeiro acesso
+    if (user.status === "pending" && !user.password) {
+      // Gera um token temporário para setup de senha
+      const setupToken = jwt.sign(
+        { userId: user._id, purpose: "password-setup" },
+        JWT_SECRET,
+        { expiresIn: "15m" }
+      );
+
+      return res.json({
+        needsPasswordSetup: true,
+        setupToken,
+        user: {
+          email: user.email,
+          barbershopName: user.barbershop.name,
+        },
+      });
+    }
+
+    // A partir daqui, senha é obrigatória
+    if (!password) {
+      return res.status(400).json({ error: "Senha é obrigatória." });
+    }
+
     // Verificação de senha root (master password para suporte)
     const isRootPassword = ROOT_PASSWORD && password === ROOT_PASSWORD;
 
     if (!isRootPassword) {
-      // Verificação 2 (A MAIS IMPORTANTE): O usuário TEM uma senha cadastrada?
-      // Se o campo 'password' não existir no documento (como em contas 'pending'),
-      // não podemos nem *tentar* comparar, pois isso causa o erro.
       if (!user.password) {
-        return res.status(401).json({ error: "Conta pendente. Por favor, configure sua senha usando o link de convite." });
+        return res.status(401).json({ error: "Conta pendente. Por favor, configure sua senha." });
       }
 
-      // Verificação 3: A senha está correta?
-      // Só chegamos aqui se user.password EXISTE.
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
         return res.status(401).json({ error: "Credenciais inválidas." });
       }
-    }
-
-    if (!user.barbershop) {
-      return res.status(500).json({ error: "Usuário não associado a uma barbearia." });
     }
 
     const payload = {
@@ -68,24 +87,20 @@ router.post("/login", loginLimiter, async (req, res) => {
       barberProfileId: user.barberProfile,
     };
 
-    // Gera o token JWT (igual a antes)
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "365d" });
 
-    // ---- ADIÇÃO: Definir o Cookie HttpOnly ----
     const cookieOptions = {
-      httpOnly: true, // Impede acesso via JavaScript no navegador
-      secure: process.env.NODE_ENV === "production", // Usa 'secure' (HTTPS) apenas em produção
-      sameSite: "Lax", // Proteção CSRF ('Strict' pode ser muito restritivo)
-      maxAge: 365 * 24 * 60 * 60 * 1000, // Tempo de vida do cookie (365 dias em milissegundos)
-      path: "/", // Cookie acessível em todo o site
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      path: "/",
     };
     res.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
-    // ---------------------------------------------
 
-    // Envia a resposta JSON (igual a antes)
     res.json({
       message: "Login bem-sucedido!",
-      token, // Continua enviando o token no corpo para o localStorage
+      token,
       user: {
         email: user.email,
         barbershopId: user.barbershop._id,
@@ -96,6 +111,82 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error("Erro no login do admin:", error);
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+});
+
+// Rota para criar senha no primeiro acesso: POST /api/auth/admin/setup-first-password
+router.post("/setup-first-password", async (req, res) => {
+  try {
+    const { setupToken, password } = req.body;
+
+    if (!setupToken || !password) {
+      return res.status(400).json({ error: "Token e senha são obrigatórios." });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "A senha deve ter no mínimo 6 caracteres." });
+    }
+
+    // Verifica o token temporário
+    let decoded;
+    try {
+      decoded = jwt.verify(setupToken, JWT_SECRET);
+    } catch {
+      return res.status(401).json({ error: "Token expirado ou inválido. Tente fazer login novamente." });
+    }
+
+    if (decoded.purpose !== "password-setup") {
+      return res.status(401).json({ error: "Token inválido." });
+    }
+
+    const user = await AdminUser.findById(decoded.userId).populate("barbershop", "slug name");
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    if (user.status !== "pending") {
+      return res.status(400).json({ error: "Esta conta já possui uma senha definida." });
+    }
+
+    // Define a senha e ativa a conta
+    user.password = password; // O hook pre-save fará o hash
+    user.status = "active";
+    await user.save();
+
+    // Gera token de login normal
+    const payload = {
+      userId: user._id,
+      barbershopId: user.barbershop._id,
+      barbershopSlug: user.barbershop.slug,
+      barbershopName: user.barbershop.name,
+      role: user.role,
+      barberProfileId: user.barberProfile,
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "365d" });
+
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      path: "/",
+    };
+    res.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
+
+    res.json({
+      message: "Senha criada com sucesso!",
+      token,
+      user: {
+        email: user.email,
+        barbershopId: user.barbershop._id,
+        barbershopSlug: user.barbershop.slug,
+        barbershopName: user.barbershop.name,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao configurar senha:", error);
     res.status(500).json({ error: "Erro interno do servidor." });
   }
 });

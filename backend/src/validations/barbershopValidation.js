@@ -52,7 +52,7 @@ export const BarbershopSchema = z.object({
 
 export const BarbershopCreationSchema = BarbershopSchema.extend({
   adminEmail: z.string().email("Email do admin é obrigatório e deve ser válido"),
-  adminPassword: z.string().min(6, "A senha do admin deve ter no mínimo 6 caracteres"),
+  adminPassword: z.string().min(6, "A senha do admin deve ter no mínimo 6 caracteres").optional(),
 });
 
 export const BarbershopUpdateSchema = BarbershopSchema.partial();

@@ -17,11 +17,29 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer, Save } from "lucide-react";
+import { Loader2, MessageSquare, X, CheckCircle2, AlertCircle, Clock, RefreshCw, Timer, Save, RotateCcw, ChevronLeft, ChevronRight, History } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { AdminOutletContext } from "@/types/AdminOutletContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PhoneFormat } from "@/helper/phoneFormater";
 import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface ReminderHistoryItem {
+  _id: string;
+  name: string;
+  phone: string;
+  sentAt: string;
+  message?: string;
+}
+
+interface ReminderPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 interface WhatsAppStatus {
   status: "disconnected" | "connecting" | "connected";
@@ -51,6 +69,19 @@ export const WhatsAppConfigPage = () => {
   const [afternoonTime, setAfternoonTime] = useState("13:00");
   const [isEnabled, setIsEnabled] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Return reminder state
+  const [returnReminderEnabled, setReturnReminderEnabled] = useState(false);
+  const [returnReminderDays, setReturnReminderDays] = useState(30);
+  const [returnReminderMessage, setReturnReminderMessage] = useState("");
+  const [isSavingReturnReminder, setIsSavingReturnReminder] = useState(false);
+  const [isLoadingReturnReminder, setIsLoadingReturnReminder] = useState(false);
+
+  // Return reminder history state
+  const [reminderHistory, setReminderHistory] = useState<ReminderHistoryItem[]>([]);
+  const [reminderPagination, setReminderPagination] = useState<ReminderPagination>({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pollingStartTimeRef = useRef<number>(0);
   const qrTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,9 +133,58 @@ export const WhatsAppConfigPage = () => {
     }
   };
 
+  const fetchReturnReminderConfig = async () => {
+    setIsLoadingReturnReminder(true);
+    try {
+      const response = await apiClient.get(`/api/barbershops/${barbershopId}/whatsapp/return-reminder`);
+      const data = response.data;
+      setReturnReminderEnabled(data.enabled ?? false);
+      setReturnReminderDays(data.inactiveDays ?? 30);
+      setReturnReminderMessage(data.customMessage ?? "");
+    } catch (error: any) {
+      console.error("Erro ao buscar configurações de lembrete de retorno:", error);
+    } finally {
+      setIsLoadingReturnReminder(false);
+    }
+  };
+
+  const handleSaveReturnReminder = async () => {
+    const clampedDays = Math.min(90, Math.max(14, returnReminderDays));
+    setReturnReminderDays(clampedDays);
+    setIsSavingReturnReminder(true);
+    try {
+      await apiClient.put(`/api/barbershops/${barbershopId}/whatsapp/return-reminder`, {
+        enabled: returnReminderEnabled,
+        inactiveDays: clampedDays,
+        customMessage: returnReminderMessage,
+      });
+      toast.success("Configurações de lembrete de retorno salvas!");
+    } catch (error: any) {
+      console.error("Erro ao salvar lembrete de retorno:", error);
+      toast.error(error.response?.data?.error || "Erro ao salvar configurações");
+    } finally {
+      setIsSavingReturnReminder(false);
+    }
+  };
+
+  const fetchReminderHistory = async (page = 1) => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await apiClient.get(`/api/barbershops/${barbershopId}/whatsapp/return-reminder/history?page=${page}&limit=20`);
+      setReminderHistory(response.data.reminders);
+      setReminderPagination(response.data.pagination);
+    } catch (error: any) {
+      console.error("Erro ao buscar histórico de lembretes:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   useEffect(() => {
     if (barbershopId) {
       fetchWhatsAppStatus();
+      fetchReturnReminderConfig();
+      fetchReminderHistory();
     }
   }, [barbershopId]);
 
@@ -502,6 +582,190 @@ export const WhatsAppConfigPage = () => {
                     Salvar Configurações de Horário
                   </Button>
                 </div>
+              </div>
+
+              <hr className="my-6" />
+
+              {/* Lembrete de Retorno de Clientes Inativos */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Lembrete de Retorno de Clientes</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Envia automaticamente uma mensagem toda terça-feira para clientes que não agendaram nos últimos X dias. As mensagens são enviadas com intervalos aleatórios para simular comportamento humano.
+                </p>
+
+                {isLoadingReturnReminder ? (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Carregando configurações...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-5 rounded-lg border p-4">
+                    {/* Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base font-medium">Ativar Lembrete de Retorno</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Clientes inativos receberão uma mensagem automática toda terça-feira às 11h.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={returnReminderEnabled}
+                        onCheckedChange={setReturnReminderEnabled}
+                        className="scale-125"
+                      />
+                    </div>
+
+                    {returnReminderEnabled && (
+                      <>
+                        {/* Número de dias */}
+                        <div className="space-y-2">
+                          <Label htmlFor="inactiveDays">Dias sem agendamento para considerar inativo</Label>
+                          <div className="flex items-center gap-3">
+                            <Input
+                              id="inactiveDays"
+                              type="number"
+                              min={14}
+                              max={90}
+                              value={returnReminderDays}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val)) setReturnReminderDays(val);
+                              }}
+                              onBlur={() => {
+                                setReturnReminderDays((prev) => Math.min(90, Math.max(14, prev)));
+                              }}
+                              className="w-28"
+                            />
+                            <span className="text-sm text-muted-foreground">dias (mín. 14, máx. 90)</span>
+                          </div>
+                        </div>
+
+                        {/* Mensagem personalizada */}
+                        <div className="space-y-2">
+                          <Label htmlFor="returnMessage">Mensagem personalizada</Label>
+                          <Textarea
+                            id="returnMessage"
+                            placeholder={`Olá, {nome}! Sentimos sua falta na {barbearia}. Já faz {dias} dias desde seu último corte. 💈\n\nQue tal agendar seu retorno?\n{link}`}
+                            value={returnReminderMessage}
+                            onChange={(e) => setReturnReminderMessage(e.target.value)}
+                            rows={5}
+                            className="resize-none font-mono text-sm"
+                          />
+                          <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground space-y-1">
+                            <p className="font-semibold">Variáveis disponíveis:</p>
+                            <div className="grid grid-cols-2 gap-1">
+                              <span><code className="bg-background px-1 rounded">{"{nome}"}</code> — Nome do cliente</span>
+                              <span><code className="bg-background px-1 rounded">{"{barbearia}"}</code> — Nome da barbearia</span>
+                              <span><code className="bg-background px-1 rounded">{"{dias}"}</code> — Dias sem visita</span>
+                              <span><code className="bg-background px-1 rounded">{"{link}"}</code> — Link de agendamento</span>
+                            </div>
+                            <p className="pt-1 italic">Se deixar em branco, será usada a mensagem padrão do sistema.</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex justify-end pt-1">
+                      <Button onClick={handleSaveReturnReminder} disabled={isSavingReturnReminder}>
+                        {isSavingReturnReminder ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Salvar Lembrete de Retorno
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <hr className="my-6" />
+
+              {/* Histórico de Lembretes Enviados */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Histórico de Lembretes Enviados</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Lista de clientes que receberam lembretes de retorno automaticamente.
+                </p>
+
+                {isLoadingHistory ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Carregando histórico...</span>
+                  </div>
+                ) : reminderHistory.length === 0 ? (
+                  <div className="rounded-lg border p-6 text-center text-muted-foreground">
+                    <p className="text-sm">Nenhum lembrete de retorno foi enviado ainda.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead>Telefone</TableHead>
+                          <TableHead>Enviado em</TableHead>
+                          <TableHead className="max-w-xs">Mensagem</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reminderHistory.map((item, index) => (
+                          <TableRow key={`${item._id}-${item.sentAt}-${index}`}>
+                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell className="font-mono text-sm">{PhoneFormat(item.phone)}</TableCell>
+                            <TableCell className="text-sm">
+                              {new Date(item.sentAt).toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                              {item.message || "Mensagem padrão do sistema"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+
+                    {/* Paginação */}
+                    {reminderPagination.totalPages > 1 && (
+                      <div className="flex items-center justify-between border-t px-4 py-3">
+                        <p className="text-sm text-muted-foreground">
+                          {reminderPagination.total} lembrete{reminderPagination.total !== 1 ? "s" : ""} enviado{reminderPagination.total !== 1 ? "s" : ""}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={reminderPagination.page <= 1}
+                            onClick={() => fetchReminderHistory(reminderPagination.page - 1)}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <span className="text-sm">
+                            {reminderPagination.page} / {reminderPagination.totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={reminderPagination.page >= reminderPagination.totalPages}
+                            onClick={() => fetchReminderHistory(reminderPagination.page + 1)}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}
