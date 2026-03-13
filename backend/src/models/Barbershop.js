@@ -41,8 +41,8 @@ const BarbershopSchema = new mongoose.Schema(
       match: [/^#[0-9A-F]{6}$/i, "Formato de cor inválido (ex: #RRGGBB)"],
       default: "#000000",
     },
-    mercadoPagoAccessToken: { type: String, trim: true },
-    mercadoPagoWebhookSecret: { type: String, trim: true },
+    stripeAccountId: { type: String, trim: true, default: null },
+    stripeOnboardingComplete: { type: Boolean, default: false },
     paymentsEnabled: { type: Boolean, default: false },
     requireOnlinePayment: {
       type: Boolean,

@@ -534,7 +534,7 @@ router.get("/:customerId/plan-history", protectAdmin, requireRole("admin", "barb
           bookings,
           createdAt: subscription.createdAt,
           autoRenew: subscription.autoRenew,
-          mercadoPagoPreapprovalId: subscription.mercadoPagoPreapprovalId,
+          stripeSubscriptionId: subscription.stripeSubscriptionId,
         };
       })
     );

@@ -40,10 +40,11 @@ const subscriptionSchema = new mongoose.Schema(
       ref: "Barber",
       required: false,
     },
-    // Campos para integração com Mercado Pago
-    mercadoPagoPreapprovalId: {
+    // Campo para integração com Stripe Billing
+    stripeSubscriptionId: {
       type: String,
       index: true,
+      default: null,
     },
     autoRenew: {
       type: Boolean,

@@ -39,6 +39,7 @@ import subscriptionPaymentRoutes from "./routes/subscriptionPaymentRoutes.js";
 import whatsappRoutes from "./routes/whatsappRoutes.js";
 import billingRoutes from "./routes/billingRoutes.js";
 import saasCheckoutRoutes from "./routes/saasCheckoutRoutes.js";
+import stripeWebhookRoutes from "./routes/stripeWebhookRoutes.js";
 
 import { protectAdmin, checkAccountStatus } from "./middleware/authAdminMiddleware.js";
 import { protectSuperAdmin } from "./middleware/authSuperAdminMiddleware.js";
@@ -95,6 +96,10 @@ app.use(globalLimiter); // DDoS Protection
 
 app.use(helmet());
 app.use(cookieParser());
+
+// Stripe webhook precisa de raw body — deve ser montado ANTES do express.json()
+app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhookRoutes);
+
 app.use(express.json());
 
 app.use(express.static("public"));

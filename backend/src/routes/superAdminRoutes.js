@@ -55,8 +55,7 @@ router.post("/barbershops", async (req, res) => {
     
     // Converte para objeto e remove campos sensíveis antes de enviar ao front
     const barbershopResponse = newBarbershop.toObject();
-    delete barbershopResponse.mercadoPagoAccessToken;
-    delete barbershopResponse.mercadoPagoWebhookSecret;
+    delete barbershopResponse.stripeAccountId;
 
     // 5. Cria o usuário Admin (dono)
     const adminData = {

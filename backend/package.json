@@ -31,7 +31,7 @@
     "helmet": "^8.1.0",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.2",
-    "mercadopago": "^2.9.0",
+    "stripe": "^17.7.0",
     "mongoose": "^8.14.1",
     "multer": "^2.0.0",
     "node-cron": "^4.1.0",

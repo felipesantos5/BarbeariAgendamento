@@ -36,8 +36,8 @@ export const BarbershopSchema = z.object({
     .optional()
     .default("#000000"),
   // checkout
-  mercadoPagoAccessToken: z.string().optional().or(z.literal("")),
-  mercadoPagoWebhookSecret: z.string().optional().or(z.literal("")),
+  stripeAccountId: z.string().optional().or(z.literal("")).nullable(),
+  stripeOnboardingComplete: z.boolean().optional(),
   paymentsEnabled: z.boolean().optional(),
   requireOnlinePayment: z.boolean().optional(),
   // recorrencia

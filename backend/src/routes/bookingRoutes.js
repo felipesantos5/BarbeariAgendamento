@@ -20,7 +20,7 @@ import { ptBR } from "date-fns/locale";
 import { toZonedTime } from "date-fns-tz";
 import { appointmentLimiter } from "../middleware/rateLimiting.js";
 import { addClient, removeClient, sendEventToBarbershop, getConnectionStats } from "../services/sseService.js";
-import { MercadoPagoConfig, Preference, PaymentRefund } from "mercadopago";
+import { createBookingCheckoutSession, createRefund } from "../services/stripeService.js";
 import { cacheService } from "../config/redis.js";
 
 const router = express.Router({ mergeParams: true });
@@ -144,57 +144,27 @@ router.post("/", appointmentLimiter, async (req, res) => {
     await customer.save();
 
     if (createdBooking.isPaymentMandatory) {
-      // FLUXO OBRIGATÓRIO: Gerar link de pagamento imediatamente
+      // FLUXO OBRIGATÓRIO: Gerar Checkout Session do Stripe imediatamente
 
-      if (!barbershop.mercadoPagoAccessToken) {
+      if (!barbershop.stripeAccountId || !barbershop.stripeOnboardingComplete) {
         return res.status(400).json({
-          error: "Pagamento online não está habilitado para esta barbearia.",
+          error: "Pagamento online não está configurado para esta barbearia.",
         });
       }
 
-      const client = new MercadoPagoConfig({
-        accessToken: barbershop.mercadoPagoAccessToken,
+      const session = await createBookingCheckoutSession({
+        barbershop,
+        booking: createdBooking,
+        service,
+        customer,
       });
-      const preference = new Preference(client);
 
-      const preferenceData = {
-        body: {
-          items: [
-            {
-              id: createdBooking._id.toString(),
-              title: `Agendamento: ${service.name}`,
-              description: "serviço de barbearia",
-              quantity: 1,
-              currency_id: "BRL",
-              unit_price: service.price,
-            },
-          ],
-          payer: {
-            name: customer.name,
-            email: `cliente_${customer._id}@email.com`,
-            phone: {
-              area_code: customer.phone.substring(0, 2),
-              number: customer.phone.substring(2, 11),
-            },
-          },
-          back_urls: {
-            success: `https://barbeariagendamento.com.br/${barbershop.slug}/pagamento-sucesso`,
-            failure: `https://barbeariagendamento.com.br/${barbershop.slug}`,
-            pending: `https://barbeariagendamento.com.br/${barbershop.slug}`,
-          },
-          auto_return: "approved",
-          notification_url: `https://api.barbeariagendamento.com.br/api/barbershops/${barbershopId}/bookings/webhook?barbershopId=${barbershopId}`,
-          external_reference: createdBooking._id.toString(),
-        },
-      };
-
-      const result = await preference.create(preferenceData);
-
-      createdBooking.paymentId = result.id;
+      // Salva o ID da session para referência futura
+      createdBooking.paymentId = session.id;
       await createdBooking.save();
 
       // Retorna o link de pagamento. NENHUMA notificação é enviada ainda.
-      res.status(201).json({ payment_url: result.init_point });
+      res.status(201).json({ payment_url: session.url });
     } else {
       // FLUXO OPCIONAL (ou pagamento desabilitado)
       // Envia notificações imediatamente
@@ -445,29 +415,16 @@ router.put(
         });
       }
 
-      // 4. Lógica de Estorno (Refund) no Mercado Pago
+      // 4. Lógica de Estorno (Refund) no Stripe
       if (booking.paymentStatus === "approved" && booking.paymentId) {
         try {
-          // Precisamos do Access Token da barbearia para o estorno cair na conta certa
-          const barbershop = await Barbershop.findById(booking.barbershop);
-          if (barbershop && barbershop.mercadoPagoAccessToken) {
-            const client = new MercadoPagoConfig({
-              accessToken: barbershop.mercadoPagoAccessToken,
-            });
-
-            const refund = new PaymentRefund(client);
-            // Executa o estorno total
-            await refund.create({
-              payment_id: booking.paymentId,
-            });
-
-            console.log(`[Refund] Estorno realizado com sucesso para o agendamento ${bookingId} (Pagamento: ${booking.paymentId})`);
-            booking.paymentStatus = "refunded";
-          }
+          // paymentId armazena o PaymentIntent ID após a migração para Stripe
+          await createRefund(booking.paymentId);
+          console.log(`[Refund] Estorno realizado com sucesso para o agendamento ${bookingId}`);
+          booking.paymentStatus = "refunded";
         } catch (refundError) {
-          console.error("[Refund] Erro ao processar estorno no Mercado Pago:", refundError.message);
-          // Opcional: Você pode decidir se bloqueia o cancelamento caso o estorno falhe
-          // Por enquanto, vamos apenas logar o erro para não travar o fluxo do cliente
+          console.error("[Refund] Erro ao processar estorno no Stripe:", refundError.message);
+          // Loga o erro mas não bloqueia o cancelamento do cliente
         }
       }
 
