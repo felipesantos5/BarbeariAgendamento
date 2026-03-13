@@ -9,6 +9,8 @@ import { bookingSchema as BookingValidationSchema } from "../../validations/book
 import { sendEventToBarbershop } from "../../services/sseService.js";
 import { protectAdmin } from "../../middleware/authAdminMiddleware.js";
 import { z } from "zod";
+import { addWeeks, addMonths, addDays, isBefore } from "date-fns";
+import { randomUUID } from "crypto";
 
 const router = express.Router({ mergeParams: true });
 
@@ -16,12 +18,67 @@ const router = express.Router({ mergeParams: true });
 router.use(protectAdmin);
 
 // 1. Estende a validação base para incluir os campos de admin
+const recurrenceSchema = z.object({
+  frequency: z.enum(["weekly", "biweekly", "monthly"]),
+  until: z.string().datetime({ message: "Data limite inválida" }),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
+});
+
 const ManualBookingSchema = BookingValidationSchema.extend({
   // Admin pode opcionalmente definir o status na criação (ex: "completed")
   status: z.enum(["booked", "confirmed", "completed", "canceled"]).optional(),
   // Admin pode forçar o agendamento mesmo se houver conflito
   force: z.boolean().optional().default(false),
+  // Recorrência opcional
+  recurrence: recurrenceSchema.optional(),
 });
+
+/**
+ * Gera as datas futuras de uma série de agendamentos recorrentes.
+ * A data de início (startDate) já foi criada, então retorna apenas as próximas.
+ */
+function generateRecurrenceDates(startDate, recurrence) {
+  const until = new Date(recurrence.until);
+  const dates = [];
+
+  if (recurrence.frequency === "weekly" && recurrence.daysOfWeek?.length > 0) {
+    // Gera ocorrências semanais para cada dia da semana especificado
+    for (const targetDay of recurrence.daysOfWeek) {
+      let current = new Date(startDate);
+      const currentDay = current.getDay();
+      const daysUntilTarget = (targetDay - currentDay + 7) % 7;
+
+      if (daysUntilTarget === 0) {
+        // Mesmo dia da semana que startDate — pula para a próxima semana
+        current = addWeeks(current, 1);
+      } else {
+        current = addDays(current, daysUntilTarget);
+        // Mantém o mesmo horário do agendamento original
+        current.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+      }
+
+      while (isBefore(current, until)) {
+        dates.push(new Date(current));
+        current = addWeeks(current, 1);
+      }
+    }
+  } else {
+    const advance =
+      recurrence.frequency === "biweekly"
+        ? (d) => addWeeks(d, 2)
+        : recurrence.frequency === "monthly"
+        ? (d) => addMonths(d, 1)
+        : (d) => addWeeks(d, 1); // weekly sem daysOfWeek
+
+    let current = advance(new Date(startDate));
+    while (isBefore(current, until)) {
+      dates.push(new Date(current));
+      current = advance(current);
+    }
+  }
+
+  return dates.sort((a, b) => a - b);
+}
 
 /**
  * ROTA: POST /api/barbershops/:barbershopId/admin/bookings
@@ -162,10 +219,74 @@ router.post("/", async (req, res) => {
       await activeSubscription.save();
     }
 
-    customer.bookings.push(createdBooking._id);
+    const allCreatedBookingIds = [createdBooking._id];
+
+    // 8. Lógica de Recorrência
+    let recurrenceInfo = null;
+    if (data.recurrence) {
+      const groupId = randomUUID();
+
+      // Marca o primeiro agendamento como parte da série
+      createdBooking.isRecurring = true;
+      createdBooking.recurrenceGroup = groupId;
+      await createdBooking.save();
+
+      const futureDates = generateRecurrenceDates(bookingTime, data.recurrence);
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      for (const date of futureDates) {
+        // Verifica conflito para cada data futura (a menos que force=true)
+        if (!data.force) {
+          const conflict = await Booking.findOne({
+            barber: data.barber,
+            time: date,
+            status: { $nin: ["canceled", "payment_expired"] },
+          });
+          if (conflict) {
+            skippedCount++;
+            continue;
+          }
+        }
+
+        const recurringPayload = {
+          barber: data.barber,
+          service: data.service,
+          customer: customer._id,
+          barbershop: barbershopId,
+          time: date,
+          status: "booked",
+          paymentStatus: "no-payment",
+          isPaymentMandatory: false,
+          isRecurring: true,
+          recurrenceGroup: groupId,
+        };
+
+        try {
+          const recurringBooking = await Booking.create(recurringPayload);
+          allCreatedBookingIds.push(recurringBooking._id);
+          createdCount++;
+        } catch (err) {
+          // Ignora erros de duplicata (index único barber+time)
+          if (err.code === 11000) {
+            skippedCount++;
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      recurrenceInfo = {
+        groupId,
+        totalCreated: createdCount + 1, // +1 inclui o primeiro
+        skipped: skippedCount,
+      };
+    }
+
+    customer.bookings.push(...allCreatedBookingIds);
     await customer.save();
 
-    // 8. Envia SSE (para atualizar a agenda do admin em tempo real)
+    // 9. Envia SSE (para atualizar a agenda do admin em tempo real)
     const populatedBooking = await Booking.findById(createdBooking._id)
       .populate("customer", "name")
       .populate("barber", "name")
@@ -178,7 +299,10 @@ router.post("/", async (req, res) => {
 
     // Intencionalmente NÃO enviamos WhatsApp
 
-    res.status(201).json(populatedBooking || createdBooking);
+    res.status(201).json({
+      ...(populatedBooking || createdBooking),
+      ...(recurrenceInfo ? { recurrenceInfo } : {}),
+    });
   } catch (e) {
     console.error("ERRO AO CRIAR AGENDAMENTO MANUAL:", e);
     if (e instanceof z.ZodError) {

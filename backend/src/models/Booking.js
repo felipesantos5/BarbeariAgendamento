@@ -30,6 +30,13 @@ const BookingSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    recurrenceGroup: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -40,6 +47,7 @@ BookingSchema.index({ barbershop: 1, time: -1 });
 BookingSchema.index({ status: 1, time: 1 });
 BookingSchema.index({ barbershop: 1, status: 1, time: 1 });
 BookingSchema.index({ createdAt: 1 });
+BookingSchema.index({ recurrenceGroup: 1 });
 
 // ✅ Único agendamento ativo por barbeiro/horário (Previne Race Condition)
 BookingSchema.index(

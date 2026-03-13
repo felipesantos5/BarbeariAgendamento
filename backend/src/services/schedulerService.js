@@ -8,6 +8,7 @@ import { startOfDay, endOfDay, getHours } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { format } from "date-fns";
 import { sendAutomatedReturnReminders } from "./returnReminderService.js";
+import { sendBirthdayGreetings } from "./birthdayGreetingService.js";
 import { sendDiscordNotification, createReminderLogEmbed } from "./discordService.js";
 import { getRedisClient } from "../config/redis.js";
 
@@ -326,6 +327,22 @@ cronTasks.push(
     () => {
       if (ENABLE_AUTOMATIC_MESSAGES) {
         sendAutomatedReturnReminders();
+      }
+    },
+    {
+      scheduled: true,
+      timezone: "America/Sao_Paulo",
+    }
+  )
+);
+
+// Parabéns de aniversário — todos os dias às 09:00 (Brasília)
+cronTasks.push(
+  cron.schedule(
+    "0 9 * * *",
+    () => {
+      if (ENABLE_AUTOMATIC_MESSAGES) {
+        sendBirthdayGreetings();
       }
     },
     {
